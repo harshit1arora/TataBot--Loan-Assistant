@@ -1,0 +1,27 @@
+# Tooling shared by both Python services. Each service keeps its own requirements.
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+extend-exclude = ["**/migrations", "**/__pycache__"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "S", "C4", "SIM"]
+ignore = [
+  "S101",   # asserts are the point of tests
+  "B008",   # FastAPI's Depends()/File() idiom is a call in a default argument
+  "E501",   # long lines are handled by the formatter, not the linter
+  "UP042",  # (str, Enum) is deliberate: it serialises predictably through pydantic
+]
+
+[tool.ruff.lint.per-file-ignores]
+"**/tests/*" = ["S105", "S106"]
+
+[tool.mypy]
+python_version = "3.12"
+warn_unused_ignores = true
+warn_redundant_casts = true
+ignore_missing_imports = true
+check_untyped_defs = true
+
+[tool.pytest.ini_options]
+filterwarnings = ["ignore::DeprecationWarning"]

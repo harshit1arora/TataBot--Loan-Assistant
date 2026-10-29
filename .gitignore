@@ -1,0 +1,41 @@
+# --- secrets -------------------------------------------------------------
+.env
+.env.*
+!.env.example
+
+# --- python --------------------------------------------------------------
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# --- data (never commit customer data, documents or the database) --------
+data/
+*.db
+*.db-wal
+*.db-shm
+storage/
+
+# --- node ----------------------------------------------------------------
+node_modules/
+dist/
+apps/web/dist/
+.vite/
+*.local
+*.tsbuildinfo
+
+# --- editors / os --------------------------------------------------------
+.DS_Store
+.idea/
+.vscode/
+*.log
+
+# --- committed on purpose -------------------------------------------------
+# docs/screenshots/*.png are documentation assets; keep them in the repo.
+!docs/screenshots/
+!docs/screenshots/*.png

@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" role="img" aria-label="TataBot">
+  <title>TataBot</title>
+  <defs>
+    <linearGradient id="tb-face" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#2C6BF0"/>
+      <stop offset="1" stop-color="#1B3A8F"/>
+    </linearGradient>
+  </defs>
+  <rect x="2" y="2" width="60" height="60" rx="17" fill="url(#tb-face)"/>
+  <rect x="2.75" y="2.75" width="58.5" height="58.5" rx="16.25" fill="none" stroke="#fff" stroke-opacity="0.18" stroke-width="1.5"/>
+  <!-- crossbar of the T -->
+  <path d="M17 20.5h30" stroke="#fff" stroke-width="6.2" stroke-linecap="round"/>
+  <!-- stem, bending into a tick -->
+  <path d="M32 20.5v11.5" stroke="#fff" stroke-width="6.2" stroke-linecap="round"/>
+  <path d="M32 32l8.4 8.6" stroke="#fff" stroke-width="6.2" stroke-linecap="round"/>
+  <!-- the approval stroke, in the accent -->
+  <path d="M40.4 40.6L48.5 29" stroke="#FBBF24" stroke-width="6.2" stroke-linecap="round"/>
+</svg>

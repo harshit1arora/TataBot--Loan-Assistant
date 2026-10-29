@@ -1,0 +1,129 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ---------------------------------------------------------------------------
+   Design tokens — white, blue, yellow.
+
+   White carries the page. Blue is structure and action. Yellow is the accent
+   that marks attention: badges, key figures, the "document needed" state.
+   Text is slate for readability; rose is reserved for errors and declines.
+--------------------------------------------------------------------------- */
+@layer base {
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 215 28% 17%;
+
+    --ink: 215 28% 17%;
+    --ink-soft: 215 16% 34%;
+    --muted: 215 14% 46%;
+
+    --surface: 214 100% 98%;
+    --surface-2: 214 60% 96%;
+
+    /* brand blue */
+    --brand: 221 83% 40%;
+    --brand-deep: 222 72% 24%;
+    --brand-soft: 219 100% 96%;
+
+    /* accent yellow */
+    --accent: 43 96% 52%;
+    --accent-soft: 45 100% 92%;
+
+    --border: 216 28% 89%;
+    --ring: 221 83% 40%;
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  html {
+    scroll-behavior: smooth;
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    @apply bg-white text-slate-900 antialiased;
+    font-feature-settings: "cv11", "ss01";
+    text-rendering: optimizeLegibility;
+  }
+
+  ::selection {
+    background: hsl(var(--accent) / 0.45);
+    color: hsl(var(--ink));
+  }
+
+  :focus-visible {
+    outline: 2px solid hsl(var(--ring));
+    outline-offset: 2px;
+  }
+}
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+
+  /* faint blue graph paper, used on light sections */
+  .grid-blue {
+    background-image:
+      linear-gradient(to right, rgb(29 78 216 / 0.06) 1px, transparent 1px),
+      linear-gradient(to bottom, rgb(29 78 216 / 0.06) 1px, transparent 1px);
+    background-size: 44px 44px;
+  }
+
+  /* the same grid, inverted for the deep-blue bands */
+  .grid-blue-dark {
+    background-image:
+      linear-gradient(to right, rgb(255 255 255 / 0.06) 1px, transparent 1px),
+      linear-gradient(to bottom, rgb(255 255 255 / 0.06) 1px, transparent 1px);
+    background-size: 56px 56px;
+  }
+
+  .highlight-yellow {
+    background-image: linear-gradient(to top, hsl(var(--accent) / 0.55) 0.42em, transparent 0.42em);
+  }
+}
+
+/* --- motion: subtle, and switched off when the OS asks --------------------- */
+@keyframes fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(28px) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.animate-fade-up {
+  animation: fade-up 0.7s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.animate-rise {
+  animation: rise 0.9s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+  .animate-fade-up,
+  .animate-rise,
+  .animate-bounce {
+    animation: none !important;
+  }
+}

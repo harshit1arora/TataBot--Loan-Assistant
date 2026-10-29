@@ -1,0 +1,120 @@
+# Local, production-shaped stack: Postgres, the two services, the extraction worker
+# and one gateway serving the SPA and proxying both APIs on a single origin.
+#
+#   cp .env.example .env    # then set the two secrets
+#   docker compose up --build
+#   open http://localhost:8080
+
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-tatabot}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-tatabot}
+      POSTGRES_DB: ${POSTGRES_DB:-tatabot}
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-tatabot}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  core:
+    build: ./services/core
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-tatabot}:${POSTGRES_PASSWORD:-tatabot}@db:5432/${POSTGRES_DB:-tatabot}
+      STORAGE_DIR: /srv/data/storage
+      TRUST_PROXY_HEADERS: "true"   # the gateway sets X-Forwarded-For
+      STORAGE_BACKEND: local
+    volumes:
+      - documents:/srv/data/storage
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+  worker:
+    build: ./services/core
+    command: ["python", "-m", "core_service.worker"]
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-tatabot}:${POSTGRES_PASSWORD:-tatabot}@db:5432/${POSTGRES_DB:-tatabot}
+      STORAGE_DIR: /srv/data/storage
+    volumes:
+      - documents:/srv/data/storage
+    depends_on:
+      core:
+        condition: service_started
+    restart: unless-stopped
+
+  conversation:
+    build: ./services/conversation
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-tatabot}:${POSTGRES_PASSWORD:-tatabot}@db:5432/${POSTGRES_DB:-tatabot}
+      CORE_BASE_URL: http://core:8000
+      AGENTS_BASE_URL: http://agents:8004
+    depends_on:
+      core:
+        condition: service_started
+      agents:
+        condition: service_started
+    restart: unless-stopped
+
+  mock-crm:
+    build: ./services/mock-crm
+    environment:
+      MOCK_CRM_TOKEN: ${MOCK_CRM_TOKEN:-mock-crm-token-change-me}
+    restart: unless-stopped
+
+  mock-offermart:
+    build: ./services/mock-offermart
+    environment:
+      MOCK_OFFERMART_TOKEN: ${MOCK_OFFERMART_TOKEN:-mock-offermart-token-change-me}
+      MOCK_CRM_TOKEN: ${MOCK_CRM_TOKEN:-mock-crm-token-change-me}
+      CRM_BASE_URL: http://mock-crm:8002
+    depends_on:
+      - mock-crm
+    restart: unless-stopped
+
+  mcp-server:
+    build: ./services/mcp-server
+    command: ["python", "-m", "mcp_server", "--http", "--port", "8765"]
+    env_file: .env
+    environment:
+      CORE_BASE_URL: http://core:8000
+      CRM_BASE_URL: http://mock-crm:8002
+      OFFERMART_BASE_URL: http://mock-offermart:8003
+      MOCK_CRM_TOKEN: ${MOCK_CRM_TOKEN:-mock-crm-token-change-me}
+      MOCK_OFFERMART_TOKEN: ${MOCK_OFFERMART_TOKEN:-mock-offermart-token-change-me}
+    depends_on:
+      - core
+      - mock-crm
+      - mock-offermart
+    restart: unless-stopped
+
+  agents:
+    build: ./services/agents
+    env_file: .env
+    environment:
+      MCP_TRANSPORT: http
+      MCP_URL: http://mcp-server:8765/mcp
+    depends_on:
+      - mcp-server
+    restart: unless-stopped
+
+  gateway:
+    build:
+      context: ./apps/web
+    ports:
+      - "8080:8080"
+    depends_on:
+      - core
+      - conversation
+    restart: unless-stopped
+
+volumes:
+  db-data:
+  documents:

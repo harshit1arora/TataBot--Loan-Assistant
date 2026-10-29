@@ -1,0 +1,5 @@
+# Vercel installs a single manifest at the project root, so this file composes the two
+# services' runtime dependencies. Versions are not repeated here: they live once, in
+# each service's requirements.txt.
+-r services/core/requirements.txt
+-r services/conversation/requirements.txt

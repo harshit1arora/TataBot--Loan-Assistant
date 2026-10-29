@@ -1,0 +1,14 @@
+# Normalise line endings so Windows checkouts do not rewrite every file.
+* text=auto eol=lf
+
+# Binary: never diff, never convert.
+*.png binary
+*.jpg binary
+*.pdf binary
+*.ico binary
+*.woff binary
+*.woff2 binary
+
+# Generated files that must not appear in diffs.
+package-lock.json linguist-generated=true
+docs/screenshots/*.png linguist-documentation=true
