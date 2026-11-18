@@ -77,27 +77,23 @@ async def list_loan_products() -> dict:
 
 @mcp.tool
 async def get_preapproved_offer(customer_id: str) -> dict:
-    """The indicative offer for a customer: limit, best product, rate and alternatives.
-
-    Prefers the CRM-backed lookup. If the customer is not in the CRM — someone who
-    registered with the lender directly — it evaluates the offer from the core's own
-    summary instead of failing or guessing a product.
-    """
+    """Evaluate registered customers from their lending profile; use CRM for seeded customers."""
     try:
-        return await upstreams.offermart_offer(customer_id)
-    except UpstreamError as exc:
-        if exc.status != 404:
-            raise _tool_error(exc) from exc
-
-    try:
-        summary = await upstreams.core_summary(customer_id)
+        summary = await upstreams.core_summary(customer_id, for_pricing=True)
+        if summary["source"] != "self_registered":
+            try:
+                return await upstreams.offermart_offer(customer_id)
+            except UpstreamError as exc:
+                if exc.status != 404:
+                    raise
         offer = await upstreams.offermart_evaluate(
-            summary["credit_score_band"], summary["declared_salary_paise"], customer_id
+            summary["credit_score"], summary["declared_salary_paise"], customer_id
         )
     except UpstreamError as exc:
         raise _tool_error(exc) from exc
 
-    offer["offer_source"] = "core_summary (customer not in CRM)"
+    offer.pop("credit_score", None)
+    offer["offer_source"] = "core_summary"
     return offer
 
 

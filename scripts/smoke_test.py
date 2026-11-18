@@ -141,6 +141,17 @@ def main() -> int:
         ).json()
         check("their own numbers produce a decision", decided["decision"]["outcome"] == "approve")
 
+        multi = client.post(
+            f"{CONV}/chat", headers=new_auth,
+            json={"message": "Am I eligible for 6 lakh over 36 months, what is the EMI, "
+                             "which documents do I need, and what is your privacy policy?"},
+        )
+        check("new customer receives a four-worker chat response",
+              multi.is_success and set(multi.json().get("agent_route", []))
+              == {"eligibility", "interest", "document", "faq"})
+        check("four-worker chat cites policy, pricing, documents and FAQ",
+              multi.is_success and len(multi.json().get("citations", [])) >= 4)
+
         ticket = client.post(
             f"{CORE}/v1/support/messages",
             json={

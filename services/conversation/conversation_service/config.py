@@ -51,7 +51,7 @@ class Settings(BaseSettings):
         default="agent-service-token-change-me",
         validation_alias=AliasChoices("agent_service_token", "agents_service_token"),
     )
-    agents_timeout_seconds: float = 20.0
+    agents_timeout_seconds: float = 40.0
 
     # --- http ------------------------------------------------------------
     allowed_origins: str = "http://localhost:8080"

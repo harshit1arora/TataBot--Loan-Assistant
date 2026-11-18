@@ -69,7 +69,6 @@ class EligibilityWorker(Worker):
                 },
             }
 
-        summary, _ = await self.safe_call("get_customer_summary", customer_id=customer_id)
         # The amount and tenure are part of the facts the answer may mention, so they must
         # be in the payload the guard checks against — otherwise legitimate prose is
         # discarded for quoting the loan the customer just asked about.
@@ -78,7 +77,6 @@ class EligibilityWorker(Worker):
             "decision": decision,
             # Readable wording, so the model does not parrot internal codes at a customer.
             "reasons_readable": [reason_text(code) for code in decision["reason_codes"]],
-            "customer": summary or {},
         }
 
         outcome = decision["outcome"]
@@ -98,10 +96,7 @@ class EligibilityWorker(Worker):
                 "and I'll re-run the check."
             )
         else:
-            fallback = (
-                f"On the current policy this would be declined: {reasons}. "
-                "You can try a smaller amount or a longer tenure."
-            )
+            fallback = f"On the current policy this would be declined: {reasons}."
 
         answer = await self.phrase(
             instruction=(

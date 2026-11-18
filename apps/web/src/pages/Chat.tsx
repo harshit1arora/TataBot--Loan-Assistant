@@ -261,7 +261,7 @@ export default function Chat() {
                 Loan assistant{me ? ` · ${me.name.split(" ")[0]}` : ""}
               </h1>
               <p className="text-[11px] text-blue-100/60">
-                Policy-led decisions · every step recorded
+                {me ? `Customer ID · ${me.customer_id}` : "Loan application"}
               </p>
             </div>
           </div>

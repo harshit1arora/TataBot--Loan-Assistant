@@ -132,7 +132,7 @@ class Upstreams:
         )
 
     async def offermart_evaluate(
-        self, credit_score_band: str, monthly_income_paise: int, customer_id: str | None
+        self, credit_score: int, monthly_income_paise: int, customer_id: str | None
     ) -> dict:
         return await self._call(
             "offermart",
@@ -140,7 +140,7 @@ class Upstreams:
             "POST",
             "/v1/offers/evaluate",
             json={
-                "credit_score_band": credit_score_band,
+                "credit_score": credit_score,
                 "monthly_income_paise": monthly_income_paise,
                 "customer_id": customer_id,
             },
@@ -164,13 +164,14 @@ class Upstreams:
         )
 
     # --- lending core ----------------------------------------------------
-    async def core_summary(self, customer_id: str) -> dict:
+    async def core_summary(self, customer_id: str, *, for_pricing: bool = False) -> dict:
         token = await self._core_service_token()
         return await self._call(
             "core",
             self.settings.core_base_url,
             "GET",
             f"/internal/customers/{customer_id}/summary",
+            params={"for_pricing": for_pricing},
             headers={"Authorization": f"Bearer {token}"},
         )
 

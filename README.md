@@ -12,7 +12,7 @@ For Gemini through Vertex AI on Cloud Run, set `LLM_PROVIDER=gemini`, `GOOGLE_GE
 
 [Run locally](#run-locally) · [Architecture](#architecture) · [Deploy on Vercel](#deploy-on-vercel)
 
-**Verification.** The local multi-service run passed 34 HTTP smoke checks, including a chat turn that called both eligibility and interest and returned sources from each. The backend suites passed 304 tests with one optional OCR test skipped. All five frontend tests and the production build passed. Hosted deployment and live-provider execution still need verification.
+**Verification.** The local multi-service run passed 36 HTTP smoke checks, including a new customer asking all four workers a question in one turn. The backend suites passed 307 tests with one optional OCR test skipped. All five frontend tests and the production build passed. Hosted deployment and live-provider execution still need verification.
 
 > Independent engineering demonstration. Not affiliated with, endorsed by, or operated by any
 > bank or NBFC. No real customer data is processed, no bureau is queried and no credit is
@@ -395,8 +395,9 @@ be explained months later without reconstruction.
 - The app refuses to boot in production with demo login enabled.
 
 ### Model keys
-- **One Groq key per role**, so a burst of eligibility questions cannot exhaust the quota the
-  router needs. Fill `services/agents/.env` (gitignored) — never the repository.
+- For Docker Compose, copy `.env.example` to the root `.env` and configure the shared service secrets. To use five model credentials, set `LLM_PROVIDER=gemini`, `GOOGLE_GENAI_USE_VERTEXAI=false`, and `REQUIRE_ROLE_KEYS=true`. Set `GOOGLE_API_KEY_ROUTER`, `GOOGLE_API_KEY_ELIGIBILITY`, `GOOGLE_API_KEY_INTEREST`, `GOOGLE_API_KEY_DOCUMENT`, and `GOOGLE_API_KEY_FAQ`. For Groq use `LLM_PROVIDER=groq` and the corresponding `GROQ_API_KEY_*` variables. Choose a model available to your account using `GEMINI_MODEL` or `GROQ_MODEL`. Strict mode checks all five credentials for presence and uniqueness at startup. Vertex AI uses the runtime service account and requires strict key mode to be off.
+- Run `docker compose up --build`, open `http://localhost:8080/login`, choose **Create account**, and supply a new profile. Try “Am I eligible for 5 lakh over 36 months, what is the EMI, which documents do I need, and what is your privacy policy?” The router can select up to four workers in one turn. LangGraph executes the selected workers concurrently, then combines their results. A direct application request goes through core policy.
+- For limited free-tier quota set `MODEL_WORKER_REPLIES=false` and leave `LLM_ENABLED=false`. Only the router in the agent graph calls the model. Each selected worker still runs its tools and formats the result. To use a model for worker replies as well, set `MODEL_WORKER_REPLIES=true`. Keys within the same Gemini project or Groq organization share provider limits. For free-tier testing use fictional applicant details.
 - **`scripts/check_groq_keys.py`** probes every configured key with a one-token call, prints the
   model and latency per role, warns if two roles share a key, and names the models your account
   can actually use when one 404s.
@@ -435,7 +436,7 @@ Two kinds, kept apart: what the build contains (countable) and what it does at r
 | Agent graph | 1 router → 4 workers → 1 synthesiser |
 | Workflow | 6 states, 10 events, 26 legal transitions, 54-combination routing matrix |
 | Credit policy | 1 versioned module; 9 reason codes; EMI and FOIR in integer paise |
-| Tests | 305 backend tests (304 passed, one optional OCR skip) — 82 core · 115 conversation · 8 CRM · 11 OfferMart · 23 MCP · 66 agents |
+| Tests | 308 backend tests (307 passed, one optional OCR skip) — 82 core · 115 conversation · 8 CRM · 11 OfferMart · 23 MCP · 69 agents |
 | Coverage | core 89% · conversation 86% · agents 88% · mcp-server 85% · CRM 91% · OfferMart 78% |
 | Lint and types | ruff clean; mypy clean on 80 files; `tsc` and eslint clean |
 | Screenshots | 34, captured from a running stack |
@@ -501,7 +502,7 @@ RBI inspection would ask for, and it exists by construction rather than by repor
 model. The language model cannot approve, decline, or invent a figure; there are tests for each of
 those. Policy changes are reviewable diffs, not prompt edits.
 
-**Engineering.** Six services with 305 backend tests and no cross-service imports; the seams are HTTP
+**Engineering.** Six services with 308 backend tests and no cross-service imports; the seams are HTTP
 contracts, so any one of them can be replaced. The conversation layer can be deleted and the core
 still lends.
 

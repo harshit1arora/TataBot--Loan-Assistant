@@ -54,7 +54,9 @@ class DocumentWorker(Worker):
 
             answer = await self.phrase(
                 instruction="You are the document agent. Report the verification state.",
-                tool_output=document,
+                tool_output={key: document.get(key) for key in (
+                    "status", "verified_income_paise", "extraction_confidence", "requires_review"
+                )},
                 fallback=fallback,
             )
             return {
@@ -77,7 +79,7 @@ class DocumentWorker(Worker):
             else (None, None)
         )
         verified = (summary or {}).get("verified_income_paise")
-        payload = {"faq": faq or {}, "customer": summary or {}}
+        payload = {"faq": faq or {}, "verified_income_paise": verified}
 
         if verified:
             fallback = (

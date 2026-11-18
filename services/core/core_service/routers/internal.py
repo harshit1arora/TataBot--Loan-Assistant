@@ -135,6 +135,7 @@ def read_document(
 @router.get("/customers/{customer_id}/summary")
 def customer_summary(
     customer_id: str,
+    for_pricing: bool = False,
     db: Session = Depends(get_db),
     _: Principal = Depends(require_service),
 ) -> dict:
@@ -145,6 +146,7 @@ def customer_summary(
         "name": customer.name,
         "age": customer.age,
         "city": customer.city,
+        **({"credit_score": customer.credit_score, "source": customer.source} if for_pricing else {}),
         "credit_score_band": customer_service.credit_score_band(customer.credit_score),
         "pre_approved_limit_paise": customer.pre_approved_limit_paise,
         "limit_source": customer.limit_source,

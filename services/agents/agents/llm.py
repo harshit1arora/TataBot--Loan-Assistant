@@ -17,6 +17,7 @@ import asyncio
 import json
 import logging
 import re
+from decimal import Decimal
 from typing import Protocol
 
 from .config import ROLES, Settings, key_for
@@ -103,7 +104,8 @@ class GeminiLLM:
     def __init__(self, settings: Settings, role: str = "shared") -> None:
         self.settings = settings
         self.role = role
-        self.available = bool(settings.vertex_project if settings.vertex_enabled else settings.gemini_api_key)
+        api_key = key_for(role, settings)
+        self.available = bool(settings.vertex_project if settings.vertex_enabled else api_key)
         self._client = None
         if self.available:
             try:
@@ -114,7 +116,7 @@ class GeminiLLM:
                         vertexai=True, project=settings.vertex_project, location=settings.vertex_location
                     )
                 else:
-                    self._client = genai.Client(api_key=settings.gemini_api_key)
+                    self._client = genai.Client(api_key=api_key)
             except Exception as exc:  # noqa: BLE001
                 logger.warning("gemini unavailable: %s", type(exc).__name__)
                 self.available = False
@@ -146,6 +148,8 @@ class GeminiLLM:
 
 def build_llm(settings: Settings, role: str = "router") -> LLM:
     """One client per role, each with its own key where one is configured."""
+    if role != "router" and not settings.model_worker_replies:
+        return RuleBasedLLM()
     provider = (settings.llm_provider or "rules").lower()
     if provider == "groq":
         client = GroqLLM(settings, role)
@@ -162,42 +166,20 @@ def numbers_in(text: str) -> set[str]:
     return {match.replace(",", "") for match in NUMBER.findall(text or "")}
 
 
-def _allowed_numbers(tool_output: str) -> set[str]:
-    """Numbers a model may legitimately quote.
-
-    Tools report money in paise; prose quotes rupees. So a tool value of 50000000 also
-    permits 500000, and 1660715 permits 16607.15. Nothing else is derived — the model
-    cannot scale, round or invent its way to a different figure.
-    """
-    allowed: set[str] = set()
-    for raw in numbers_in(tool_output):
-        allowed.add(raw)
-        try:
-            value = float(raw)
-        except ValueError:
-            continue
-        if value and value % 100 == 0:
-            allowed.add(f"{value / 100:.2f}".rstrip("0").rstrip("."))
-        allowed.add(f"{value / 100:.2f}")
-    return allowed
+def _allowed_numbers(value: object, field: str = "") -> set[Decimal]:
+    if isinstance(value, dict):
+        return set().union(*(_allowed_numbers(item, key) for key, item in value.items()))
+    if isinstance(value, list):
+        return set().union(*(_allowed_numbers(item, field) for item in value))
+    numbers = {Decimal(raw) for raw in numbers_in(str(value))}
+    if field.endswith("_paise"):
+        numbers.update(number / 100 for number in tuple(numbers))
+    return numbers
 
 
 def prose_is_grounded(prose: str, tool_output: str) -> bool:
-    """Every figure in the prose must come from the tool output.
-
-    A model may phrase things; it may not introduce a number. Empty prose fails too.
-    """
+    """Accept equivalent numeric spellings and rupee equivalents of explicit paise fields."""
     if not prose or not prose.strip():
         return False
-    allowed = _allowed_numbers(tool_output)
-    for raw in numbers_in(prose):
-        if raw in allowed:
-            continue
-        # Tolerate trailing-zero forms of an allowed value ("16,607.15" vs "16607.15").
-        try:
-            if f"{float(raw):.2f}" in allowed:
-                continue
-        except ValueError:
-            return False
-        return False
-    return True
+    allowed = _allowed_numbers(json.loads(tool_output))
+    return all(Decimal(raw) in allowed for raw in numbers_in(prose))

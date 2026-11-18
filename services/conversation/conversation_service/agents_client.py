@@ -72,7 +72,7 @@ class AgentsClient:
                 return response.json()
             except (httpx.HTTPError, AgentsUnavailable) as exc:
                 logger.warning("agent call failed (%s)", type(exc).__name__)
-                if attempt == 0:
+                if attempt == 0 and isinstance(exc, (httpx.ConnectError, httpx.ConnectTimeout)):
                     await asyncio.sleep(0.2)
                     continue
                 self._failures += 1

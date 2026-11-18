@@ -161,7 +161,7 @@ export function sendMessage(message: string, sessionId: string | null): Promise<
   return request<ChatResponse>("/chat", {
     method: "POST",
     body: JSON.stringify(sessionId ? { message, session_id: sessionId } : { message }),
-  });
+  }, 55_000);
 }
 
 export function sessionStatus(sessionId: string): Promise<SessionView> {

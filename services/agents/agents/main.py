@@ -16,7 +16,7 @@ from typing import Annotated, Literal
 from fastapi import Depends, FastAPI, Header, Request, Response
 from fastapi.responses import JSONResponse
 
-from .config import ROLES, key_report, settings
+from .config import ROLES, key_report, settings, validate_role_keys
 from .graph import AgentGraph
 from .llm import build_llm
 from .mcp_client import McpToolbox
@@ -36,6 +36,7 @@ def require_service_token(x_service_token: Annotated[str | None, Header()] = Non
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    validate_role_keys(settings)
     toolbox = McpToolbox(settings)
     llms = {role: build_llm(settings, role) for role in ROLES}
     app.state.graph = AgentGraph(settings, toolbox=toolbox, llms=llms)

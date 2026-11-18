@@ -290,3 +290,34 @@ async def test_model_prose_is_still_rejected_when_it_invents_a_figure(toolbox):
     answer = result["results"]["eligibility"]["answer"]
     assert "99,999" not in answer
     assert "50,00,000" not in answer
+
+async def test_four_workers_overlap_for_new_customer(graph, monkeypatch):
+    import asyncio
+
+    from conftest import fresh_customer
+
+    customer_id, _ = fresh_customer(income_rupees=60_000, score=768)
+    started = set()
+    all_started = asyncio.Event()
+
+    def observe(name, run):
+        async def observed(state):
+            started.add(name)
+            if len(started) == 4:
+                all_started.set()
+            await asyncio.wait_for(all_started.wait(), timeout=5)
+            return await run(state)
+        return observed
+
+    for name, worker in graph.workers.items():
+        monkeypatch.setattr(worker, "run", observe(name, worker.run))
+    result = await graph.run(
+        "Am I eligible for 5 lakh over 36 months, what is the EMI, "
+        "which documents do I need, and what is the privacy policy?", customer_id
+    )
+    assert set(result["route"]) == started == {"eligibility", "interest", "document", "faq"}
+    assert all(worker["kind"] != "error" for worker in result["results"].values())
+    assert result["results"]["eligibility"]["data"]["decision"]["outcome"] == "require_document"
+    offer = result["results"]["interest"]["data"]["offer"]
+    assert offer["customer_id"] == customer_id
+    assert offer["offer_source"].startswith("core_summary")

@@ -200,7 +200,7 @@ async def test_offer_falls_back_to_the_core_when_the_crm_does_not_know_the_custo
             "age": 34,
             "city": "Nashik",
             "declared_monthly_income_rupees": 100_000,
-            "declared_credit_score": 745,
+            "declared_credit_score": 710,
         },
     ).json()
     customer_id = created["customer_id"]
@@ -209,7 +209,8 @@ async def test_offer_falls_back_to_the_core_when_the_crm_does_not_know_the_custo
         result = await client.call_tool("get_preapproved_offer", {"customer_id": customer_id})
 
     offer = result.data
+    assert "credit_score" not in offer
     assert offer["offer_source"].startswith("core_summary")
     assert offer["approved_limit_paise"] == 60_000_000  # 6 × ₹1,00,000
-    assert offer["product"]["code"] == "PL_STANDARD", "745 belongs on the standard product"
+    assert offer["product"]["code"] == "PL_STANDARD", "710 belongs on the standard product"
     assert offer["product"]["annual_rate_percent"] == 12.0

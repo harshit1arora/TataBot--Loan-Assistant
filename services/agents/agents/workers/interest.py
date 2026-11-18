@@ -42,6 +42,15 @@ class InterestWorker(Worker):
         )
         product_code = (offer or {}).get("product", {}).get("code")
 
+        if customer_id and not product_code:
+            return {
+                "steps": ["interest: no confirmed product for this customer"],
+                "results": {"interest": {
+                    "kind": "error",
+                    "answer": "I could not confirm a product rate for your profile, so I cannot give a personalised EMI.",
+                }},
+            }
+
         quote, error = await self.safe_call(
             "quote_emi", amount_rupees=amount, tenure_months=tenure, product_code=product_code
         )
@@ -75,7 +84,7 @@ class InterestWorker(Worker):
                 "and the total repayment in plain English. Never print internal codes. "
                 f"Amount {rupees(amount)}, tenure {tenure} months."
             ),
-            tool_output=payload,
+            tool_output={"request": payload["request"], "quote": quote},
             fallback=fallback,
         )
 
@@ -84,7 +93,7 @@ class InterestWorker(Worker):
             "results": {
                 "interest": {
                     "kind": "answer",
-                    "answer": answer,
+                    "answer": answer + " This is an indicative product quote. The application uses the lending policy rate.",
                     "data": payload,
                     "citations": [f"OfferMart {quote['product_code']}"],
                 }

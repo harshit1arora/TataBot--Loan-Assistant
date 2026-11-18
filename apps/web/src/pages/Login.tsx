@@ -44,10 +44,10 @@ export default function Login() {
     name: "",
     phone: "",
     email: "",
-    age: 30,
+    age: "",
     city: "",
-    income: 60000,
-    score: 740,
+    income: "",
+    score: "",
   });
 
   const set = <K extends keyof typeof form>(key: K, value: (typeof form)[K]) =>
@@ -81,7 +81,10 @@ export default function Login() {
         declared_monthly_income_rupees: Number(form.income),
         declared_credit_score: Number(form.score),
       });
-      // Sign straight in with the account that was just created.
+      setCustomerId(created.customer_id);
+      setPhone(form.phone.trim());
+      setMode("signin");
+      // Preserve the assigned ID if registration succeeds but sign-in needs a retry.
       await login(created.customer_id, form.phone.trim());
       navigate("/chat", { replace: true });
     } catch (err) {
@@ -95,10 +98,8 @@ export default function Login() {
 
   function pickDemo(id: string) {
     const found = DEMO_CUSTOMERS.find((c) => c.id === id);
-    if (found) {
-      setCustomerId(found.id);
-      setPhone(found.phone);
-    }
+    setCustomerId(id.toUpperCase());
+    setPhone(found?.phone ?? "");
   }
 
   const indicativeLimit = Math.min(Math.floor((Number(form.income) * 6) / 1000) * 1000, 5000000);
@@ -117,7 +118,7 @@ export default function Login() {
         <p className="mt-1 text-sm text-slate-600">
           {mode === "signin"
             ? "Use a demo profile, or an account you created earlier."
-            : "Your details are stored in the database and used for a real decision."}
+            : "Enter your details to see how the demo lending policy assesses your application."}
         </p>
 
         <div className="mt-5 grid grid-cols-2 gap-1 rounded-xl bg-blue-50 p-1" role="tablist">
@@ -148,18 +149,21 @@ export default function Login() {
               <label htmlFor="customerId" className={LABEL}>
                 Customer ID
               </label>
-              <select
+              <input
+                list="demo-customer-ids"
+                required
                 id="customerId"
                 value={customerId}
                 onChange={(e) => pickDemo(e.target.value)}
-                className={`${FIELD} appearance-none`}
-              >
+                className={FIELD}
+              />
+              <datalist id="demo-customer-ids">
                 {DEMO_CUSTOMERS.map((c) => (
                   <option key={c.id} value={c.id}>
                     {c.id} — {c.label}
                   </option>
                 ))}
-              </select>
+              </datalist>
             </div>
 
             <div>
@@ -239,7 +243,7 @@ export default function Login() {
                   min={18}
                   max={80}
                   value={form.age}
-                  onChange={(e) => set("age", Number(e.target.value))}
+                  onChange={(e) => set("age", e.target.value)}
                   className={FIELD}
                 />
               </div>
@@ -285,9 +289,9 @@ export default function Login() {
                   required
                   type="number"
                   min={5000}
-                  step={1000}
+                  step={1}
                   value={form.income}
-                  onChange={(e) => set("income", Number(e.target.value))}
+                  onChange={(e) => set("income", e.target.value)}
                   className={FIELD}
                 />
               </div>
@@ -302,18 +306,18 @@ export default function Login() {
                   min={300}
                   max={900}
                   value={form.score}
-                  onChange={(e) => set("score", Number(e.target.value))}
+                  onChange={(e) => set("score", e.target.value)}
                   className={FIELD}
                 />
               </div>
             </div>
 
             <div className="rounded-xl border border-blue-100 bg-blue-50/70 p-3 text-[11.5px] leading-relaxed text-slate-600">
-              <p>
+              {form.income && <p>
                 <span className="font-semibold text-blue-900">Indicative limit:</span>{" "}
                 {formatINR(indicativeLimit * 100)} — six months of the income you enter, capped by
-                policy. This is derived, not an offer.
-              </p>
+                policy.
+              </p>}
               <p className="mt-1.5">
                 <span className="font-semibold text-blue-900">Credit score is self-declared.</span>{" "}
                 There is no bureau integration in this build, so the decision records that it

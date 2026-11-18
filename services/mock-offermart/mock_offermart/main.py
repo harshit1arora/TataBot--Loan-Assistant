@@ -29,8 +29,9 @@ def require_service_token(x_service_token: Annotated[str | None, Header()] = Non
 class EvaluateRequest(BaseModel):
     """An offer for a profile the caller already holds (no CRM lookup)."""
 
-    credit_score_band: Literal["excellent", "good", "fair"]
-    monthly_income_paise: Annotated[int, Field(ge=100_000, le=100_000_000)]
+    credit_score_band: Literal["excellent", "good", "fair"] | None = None
+    credit_score: Annotated[int | None, Field(ge=300, le=900)] = None
+    monthly_income_paise: Annotated[int, Field(ge=100_000, le=1_000_000_000)]
     customer_id: str | None = None
 
 
@@ -78,9 +79,17 @@ async def get_offer(customer_id: str) -> dict:
 
 @app.post("/v1/offers/evaluate", dependencies=[Depends(require_service_token)])
 def evaluate_offer(payload: EvaluateRequest) -> dict:
-    offer = build_offer_for_band(
-        payload.credit_score_band, payload.monthly_income_paise, payload.customer_id
-    )
+    if payload.credit_score is not None:
+        offer = build_offer({
+            "id": payload.customer_id, "name": "Customer", "credit_score": payload.credit_score,
+            "monthly_income_paise": payload.monthly_income_paise,
+        })
+    elif payload.credit_score_band:
+        offer = build_offer_for_band(
+            payload.credit_score_band, payload.monthly_income_paise, payload.customer_id
+        )
+    else:
+        raise HTTPException(status_code=422, detail="a score or score band is required")
     if offer is None:
         raise HTTPException(status_code=422, detail="no product available for this credit band")
     return offer
