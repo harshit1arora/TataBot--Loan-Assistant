@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 import re
 
 from .config import Settings
@@ -34,7 +35,8 @@ class LlmClient:
     def __init__(self, settings: Settings) -> None:
         self.settings = settings
         self._model = None
-        self.enabled = bool(settings.llm_enabled and settings.google_api_key)
+        self.enabled = bool(settings.llm_enabled and settings.google_api_key
+                            and not os.getenv("REDIS_URL") and settings.env.lower() not in {"production", "prod"})
         if self.enabled:
             try:
                 from google import genai

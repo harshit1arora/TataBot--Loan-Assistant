@@ -60,7 +60,7 @@ export function hasToken(): boolean {
   return Boolean(token) && Date.now() < expiresAt;
 }
 
-async function request<T>(
+export async function request<T>(
   path: string,
   init: RequestInit = {},
   timeoutMs = DEFAULT_TIMEOUT_MS,
@@ -92,7 +92,7 @@ async function request<T>(
       try {
         const body = (await response.json()) as ApiErrorBody;
         code = body.error?.code ?? code;
-        message = body.error?.message ?? message;
+        message = body.error?.message ?? (typeof body.detail === "string" ? body.detail : message);
         requestId = body.error?.request_id ?? requestId;
       } catch {
         /* non-JSON error body */

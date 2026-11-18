@@ -15,7 +15,7 @@ from ..config import Settings, get_settings
 from ..db import get_db
 from ..errors import NotFoundError, PolicyRejection
 from ..models import Document
-from ..money import paise_to_rupees, rupees_to_paise
+from ..money import compute_emi_paise, paise_to_rupees, rupees_to_paise
 from ..policy import Applicant, build_policy, decide
 from ..schemas import DecisionView, DocumentView, EligibilityPreviewRequest
 from ..security import Principal, require_service
@@ -23,6 +23,7 @@ from ..services import audit
 from ..services import customers as customer_service
 from ..services import documents as document_service
 from ..storage import build_store
+from .quotes import ProductEstimate, save_quote, terms, view
 
 router = APIRouter(tags=["internal"], prefix="/internal")
 
@@ -153,3 +154,14 @@ def customer_summary(
         "declared_salary_paise": customer.declared_salary_paise,
         "verified_income_paise": document_service.verified_monthly_income_paise(db, customer.id),
     }
+
+@router.post("/customers/{customer_id}/product-quote")
+def save_product_estimate(customer_id: str, payload: ProductEstimate, _: Principal = Depends(require_service),
+                          db: Session = Depends(get_db), settings: Settings = Depends(get_settings)) -> dict:
+    customer = customer_service.get_or_404(db, customer_id)
+    snapshot = terms(db, settings, customer, payload)
+    emi = compute_emi_paise(payload.amount_rupees * 100, payload.rate, payload.tenure_months)
+    snapshot.update(product=payload.product, rate=payload.rate, emi_paise=emi,
+                    total_interest_paise=emi * payload.tenure_months - payload.amount_rupees * 100,
+                    pricing_source="OfferMart")
+    return view(save_quote(db, customer.id, snapshot))

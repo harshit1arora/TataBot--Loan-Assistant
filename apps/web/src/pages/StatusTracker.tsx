@@ -154,8 +154,7 @@ export default function StatusTracker() {
                   <button
                     type="button"
                     onClick={() => {
-                      setSessionId(application.application_id);
-                      void load(application.application_id);
+                      window.location.assign("/scenarios?application="+encodeURIComponent(application.application_id));
                     }}
                     className="flex w-full items-center justify-between gap-3 py-2.5 text-left hover:bg-blue-50/50"
                   >
@@ -241,6 +240,7 @@ export default function StatusTracker() {
               </div>
             )}
 
+            <a className="block text-blue-800" href={"/scenarios?application="+application.application_id}>Decision details and next action</a>
             {trace && trace.steps.length > 0 && (
               <div className="mt-5 border-t border-blue-100 pt-4">
                 <button
@@ -289,6 +289,13 @@ export default function StatusTracker() {
             )}
           </section>
         )}
+        {trace?.turns?.map(turn=><details key={turn.trace_id} className="mt-3 rounded-lg border bg-white p-3">
+          <summary>Turn {turn.trace_id.slice(0,8)} · {turn.intent} · {turn.router_detail?.model || turn.router || "workflow"}</summary>
+          {turn.router_detail?.fallback && <p>Routing mode · {turn.router_detail.fallback.replace(/_/g," ")}</p>}
+          {Object.entries(turn.workers || {}).map(([name,w])=><div className="mt-2 text-sm" key={name}>
+            <strong>{name}</strong> · {w.outcome} · {w.model || w.wording} {w.fallback || ""} · {w.started_at} → {w.finished_at}
+            <p>{w.tools.map(t=>t.name+" ("+t.status+")").join(", ")} {w.policy_version}</p></div>)}
+        </details>)}
       </div>
     </main>
   );

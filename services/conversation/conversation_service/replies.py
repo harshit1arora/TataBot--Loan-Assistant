@@ -36,14 +36,16 @@ def approved(amount_paise: int, emi_paise: int, tenure_months: int, rate: float)
 def rejected(reasons: list[str]) -> str:
     readable = {
         "credit_score_below_min": "your credit score is below our current minimum",
-        "amount_above_max_multiple_of_pre_approved": "the amount is more than twice your pre-approved limit",
-        "emi_exceeds_foir_limit": "the EMI would exceed 50% of your verified monthly income",
+        "amount_above_max_multiple_of_pre_approved": "the amount exceeds the policy ceiling for your available limit",
+        "emi_exceeds_foir_limit": "the EMI exceeds the policy limit for your verified monthly income",
         "age_out_of_range": "your age is outside our lending range",
         "amount_above_policy_max": "the amount is outside our permitted range",
         "verified_income_document_required": "we need proof of income for this amount",
         "verified_income_unavailable": "we could not verify your income",
     }
     why = "; ".join(readable.get(reason, reason.replace("_", " ")) for reason in reasons) or "our policy criteria"
+    if "credit_score_below_min" in reasons or "age_out_of_range" in reasons:
+        return f"We cannot approve this application because {why}. Contact support if the information used is incorrect."
     return (
         f"I'm sorry — we can't approve this application because {why}. "
         "You can apply for a lower amount, or try again after six months. "

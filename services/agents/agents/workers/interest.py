@@ -78,15 +78,7 @@ class InterestWorker(Worker):
             f"{inr(quote['total_interest_paise'])} is interest."
         )
 
-        answer = await self.phrase(
-            instruction=(
-                "You are the interest agent, speaking to the customer. Explain the EMI, the rate "
-                "and the total repayment in plain English. Never print internal codes. "
-                f"Amount {rupees(amount)}, tenure {tenure} months."
-            ),
-            tool_output={"request": payload["request"], "quote": quote},
-            fallback=fallback,
-        )
+        answer = fallback
 
         return {
             "steps": [f"interest: quote_emi -> {inr(quote['emi_paise'])}/month"],

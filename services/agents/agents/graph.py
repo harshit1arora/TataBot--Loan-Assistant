@@ -12,7 +12,10 @@ one place.
 """
 from __future__ import annotations
 
+import asyncio
 import logging
+import time
+from datetime import UTC, datetime
 
 from langgraph.graph import END, StateGraph
 
@@ -21,6 +24,7 @@ from .llm import LLM, RuleBasedLLM
 from .mcp_client import McpToolbox
 from .router import Router
 from .state import AgentState
+from .telemetry import active_worker, deadline, router_event
 from .workers.document import DocumentWorker
 from .workers.eligibility import EligibilityWorker
 from .workers.faq import FaqWorker
@@ -72,30 +76,46 @@ class AgentGraph:
 
     # -- nodes -------------------------------------------------------------
     async def router_node(self, state: AgentState) -> dict:
-        workers, reason, decided_by = await self.router.route(state["question"])
+        event: dict = {}
+        token = router_event.set(event)
+        try:
+            workers, reason, decided_by = await self.router.route(state["question"])
+        finally:
+            router_event.reset(token)
         return {
             "route": workers,
             "route_reason": reason,
             "decided_by": decided_by,
+            "router_detail": event,
             "steps": [f"router ({decided_by}): {', '.join(workers)} — {reason}"],
         }
 
     def _worker_node(self, name: str):
         async def node(state: AgentState) -> dict:
+            record: dict = {"started_at": datetime.now(UTC).isoformat(), "tools": [], "wording": "template"}
+            token = active_worker.set(record)
             try:
-                return await self.workers[name].run(dict(state))
+                output = await asyncio.wait_for(self.workers[name].run(dict(state)),
+                                                max(0.01, deadline.get() - time.monotonic()))
+                output["results"][name]["trace"] = record
+                return output
             except Exception as exc:  # noqa: BLE001 - one worker failing must not kill the turn
                 logger.exception("worker %s failed", name)
                 return {
                     "steps": [f"{name}: crashed ({type(exc).__name__})"],
                     "results": {
                         name: {
+                            "trace": record,
                             "kind": "error",
                             "answer": "That part of the answer failed. The other agents' findings "
                             "still stand.",
                         }
                     },
                 }
+
+            finally:
+                record["finished_at"] = datetime.now(UTC).isoformat()
+                active_worker.reset(token)
 
         return node
 
@@ -158,7 +178,11 @@ class AgentGraph:
         from .state import new_state
 
         initial = new_state(question, customer_id, document_id)
-        return await self.graph.ainvoke(initial)
+        token = deadline.set(time.monotonic() + self.settings.turn_deadline_seconds)
+        try:
+            return await self.graph.ainvoke(initial)
+        finally:
+            deadline.reset(token)
 
     def topology(self) -> dict:
         """Exposed so the routing can be inspected without reading the source."""

@@ -95,6 +95,7 @@ export interface SignedUrlResponse {
 }
 
 export interface ChatResponse {
+  quote_id?:string;
   session_id: string;
   state: string;
   reply: string;
@@ -159,6 +160,7 @@ export interface TraceStep {
 }
 
 export interface SessionTrace {
+  turns?: {trace_id:string; at:string; intent:string; router?:string; router_detail?:{model?:string; fallback?:string}; workers?:Record<string,{started_at:string;finished_at:string;wording:string;model?:string;fallback?:string;outcome:string;policy_version?:string;tools:{name:string;status:string}[]}>}[];
   session_id: string;
   state: string;
   application_id: string | null;
@@ -167,6 +169,7 @@ export interface SessionTrace {
 }
 
 export interface ApiErrorBody {
+  detail?: unknown;
   error: {
     code: string;
     message: string;

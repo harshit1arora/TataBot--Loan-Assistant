@@ -6,15 +6,17 @@ and a tenure and nothing else.
 """
 from __future__ import annotations
 
+from dataclasses import replace
+
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from ..config import Settings
 from ..errors import NotFoundError, PolicyRejection
-from ..models import Application, Customer, DecisionRecord
+from ..models import Application, Customer, DecisionRecord, Document, PilotQuote, ReviewRecord
 from ..money import paise_to_rupees, rupees_to_paise
 from ..policy import Applicant, CreditPolicy, Outcome, build_policy, decide
-from ..services import audit, documents
+from ..services import audit
 
 
 def create_application(
@@ -80,14 +82,25 @@ def latest_decision(db: Session, application_id: str) -> DecisionRecord | None:
     ).scalars().first()
 
 
-def evaluate(db: Session, *, settings: Settings, application: Application) -> DecisionRecord:
+def evaluate(db: Session, *, settings: Settings, application: Application, reviewed: Document | None = None) -> DecisionRecord:
     """Run the credit policy against an application and persist the decision."""
     policy: CreditPolicy = build_policy(settings)
     customer = db.get(Customer, application.customer_id)
     if customer is None:
         raise NotFoundError("Customer not found.")
 
-    verified_income = documents.verified_monthly_income_paise(db, customer.id)
+    accepted = db.scalar(select(PilotQuote).where(PilotQuote.application_id == application.id))
+    if accepted:
+        policy = replace(policy, annual_rate_percent=accepted.terms['rate'])
+    evidence = db.scalar(select(Document).where(Document.customer_id == customer.id, Document.doc_type == 'salary_slip', Document.status == 'extracted', Document.requires_review.is_(False), Document.verified_income_paise.is_not(None)).order_by(Document.created_at.desc()))
+    if reviewed is not None:
+        if reviewed.application_id != application.id or reviewed.customer_id != customer.id:
+            raise ValueError("Evidence does not belong to the application")
+        evidence = reviewed
+    verified_income = evidence.verified_income_paise if evidence else None
+    source = 'declared'
+    if evidence:
+        source = 'underwriter_verified' if db.get(ReviewRecord, evidence.id) else 'document_extraction'
     applicant = Applicant(
         customer_id=customer.id,
         age=customer.age,
@@ -111,6 +124,10 @@ def evaluate(db: Session, *, settings: Settings, application: Application) -> De
             "credit_score_band": "redacted",  # the raw score is not copied around
             "pre_approved_limit_paise": customer.pre_approved_limit_paise,
             "verified_income_paise": verified_income,
+            "evidence_id": evidence.id if evidence else None,
+            "income_source": source,
+            "effective_rate_percent": decision.interest_rate_percent,
+            "score_source": customer.score_source,
             "policy_version": decision.policy_version,
         },
     )

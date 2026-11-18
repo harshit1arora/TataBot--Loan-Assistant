@@ -8,7 +8,7 @@ from __future__ import annotations
 import uuid
 from datetime import UTC, datetime
 
-from sqlalchemy import DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy import JSON, DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from .db import Base
@@ -35,6 +35,8 @@ class ConversationSession(Base):
     version: Mapped[int] = mapped_column(Integer, default=0)  # optimistic concurrency
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
+
+    __mapper_args__ = {'version_id_col': version, 'version_id_generator': False}
 
     messages: Mapped[list[Message]] = relationship(
         back_populates="session", order_by="Message.created_at"
@@ -77,4 +79,18 @@ class Transition(Base):
     from_state: Mapped[str] = mapped_column(String(32))
     to_state: Mapped[str] = mapped_column(String(32))
     event: Mapped[str] = mapped_column(String(48))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class ApplicationAttempt(Base):
+    __tablename__ = "conversation_attempts"
+    session_id: Mapped[str] = mapped_column(ForeignKey("conversation_sessions.id"), primary_key=True)
+    attempt_id: Mapped[str] = mapped_column(String(32), default=_uuid)
+
+
+class TurnTrace(Base):
+    __tablename__ = "conversation_turn_traces"
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=_uuid)
+    session_id: Mapped[str] = mapped_column(ForeignKey("conversation_sessions.id"), index=True)
+    detail: Mapped[dict] = mapped_column(JSON)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)

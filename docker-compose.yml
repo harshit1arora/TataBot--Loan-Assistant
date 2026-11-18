@@ -6,6 +6,9 @@
 #   open http://localhost:8080
 
 services:
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
   db:
     image: postgres:16-alpine
     environment:
@@ -28,6 +31,7 @@ services:
       STORAGE_DIR: /srv/data/storage
       TRUST_PROXY_HEADERS: "true"   # the gateway sets X-Forwarded-For
       STORAGE_BACKEND: local
+      REDIS_URL: redis://redis:6379/0
     volumes:
       - documents:/srv/data/storage
     depends_on:
@@ -56,6 +60,7 @@ services:
       DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-tatabot}:${POSTGRES_PASSWORD:-tatabot}@db:5432/${POSTGRES_DB:-tatabot}
       CORE_BASE_URL: http://core:8000
       AGENTS_BASE_URL: http://agents:8004
+      REDIS_URL: redis://redis:6379/0
     depends_on:
       core:
         condition: service_started
@@ -100,6 +105,7 @@ services:
     env_file: .env
     environment:
       MCP_TRANSPORT: http
+      REDIS_URL: redis://redis:6379/0
       MCP_URL: http://mcp-server:8765/mcp
     depends_on:
       - mcp-server
@@ -108,6 +114,11 @@ services:
   gateway:
     build:
       context: ./apps/web
+      args:
+        VITE_OIDC_ISSUER: ${OIDC_ISSUER:-}
+        VITE_OIDC_CLIENT_ID: ${OIDC_AUDIENCE:-}
+    environment:
+      OIDC_CONNECT_ORIGIN: ${OIDC_CONNECT_ORIGIN:-}
     ports:
       - "8080:8080"
     depends_on:

@@ -137,6 +137,10 @@ async def query(
     }
 
     return QueryResponse(
+        router_detail=result.get("router_detail", {}),
+        worker_trace={name: {**item.get("trace", {}), "outcome": item.get("kind"),
+                    "policy_version": item.get("data", {}).get("decision", {}).get("policy_version")}
+                    for name, item in result.get("results", {}).items()},
         answer=result.get("answer", ""),
         route=result.get("route", []),
         route_reason=result.get("route_reason", ""),

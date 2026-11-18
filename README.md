@@ -12,13 +12,52 @@ For Gemini through Vertex AI on Cloud Run, set `LLM_PROVIDER=gemini`, `GOOGLE_GE
 
 [Run locally](#run-locally) · [Architecture](#architecture) · [Deploy on Vercel](#deploy-on-vercel)
 
-**Verification.** The local multi-service run passed 36 HTTP smoke checks, including a new customer asking all four workers a question in one turn. The backend suites passed 307 tests with one optional OCR test skipped. All five frontend tests and the production build passed. Hosted deployment and live-provider execution still need verification.
+**Verification.** The company demo exercises verified enrollment, a four-worker turn, quote comparison, ambiguous document extraction, human review, a policy decision and PDF issuance over HTTP. The lab uses signed synthetic identities and rule routing. Live identity and model providers require deployment credentials.
 
 > Independent engineering demonstration. Not affiliated with, endorsed by, or operated by any
 > bank or NBFC. No real customer data is processed, no bureau is queried and no credit is
 > offered. Sanction letters are stamped as simulated.
 
 ---
+
+## Company pilot
+
+Run the complete HTTP demonstration from the repository root in a fresh Python 3.12 environment.
+
+```sh
+python -m pip install -r services/core/requirements-dev.txt -r services/conversation/requirements-dev.txt -r services/agents/requirements.txt
+python scripts/demo_lab/run.py
+```
+
+The runner starts six services on loopback ports with temporary databases and private document storage. A local HTTPS test issuer signs separate applicant and reviewer identities. Core validates signature, issuer, audience, expiry and verified mobile claim. The runner prints the trace ID, participating workers, quote ID, application ID and final policy reason. It also runs the HTTP smoke suite and stops its processes. This reproducible demo uses rule routing. CI supplies Redis 7. Set `TEST_REDIS_URL` to a test Redis instance to include distributed request limiting locally.
+
+### Present the applicant journey
+
+1. Open `/login` and choose verified sign-in. Enrollment asks for the applicant’s details and explicit consent to assess income and uploaded evidence. Core records the verified mobile, identity issuer, subject binding and consent version. Credit score and income start as self-declared facts.
+2. Ask “Am I eligible for 5 lakh over 36 months, what is the EMI, which documents do I need, and what is your privacy policy?” Open the session in **Status**. Each turn has a trace ID, routing source, worker start and finish times, tool outcomes, wording source and applicable policy version. The execution trace excludes raw questions, documents and salaries.
+3. Open **Compare loans** from chat. Compare up to three amounts and tenures. Each application quote has a product, rate, EMI, total interest, expiry, decision preview and policy version. OfferMart supplies the indicative catalogue estimate. Core issues the application quote. Accepting it binds it to one application. A retry returns the same application. Expired or changed terms require a renewed confirmation.
+4. Upload a salary slip on the decision page. Low-confidence evidence enters the underwriter queue. In a separate browser profile, sign in at `/review` with an authorized reviewer identity. Inspect the original, extracted fields and confidence. Confirm income, correct it, or request a replacement. Core records the reviewer, reason and evidence and re-evaluates the original application.
+5. Refresh **Your decision** to see the outcome, reasons, assessed amount, income provenance and next action. An approval can issue a simulated sanction PDF.
+
+### Configure the pilot
+
+Register a public OpenID Connect client using authorization code with PKCE and `openid phone` scopes. Allow the frontend origin and exact callback `https://YOUR-HOST/identity`. The issuer must supply a verified `phone_number` in +91 format and boolean `phone_number_verified`. The browser validates state and nonce. Core validates RS256 ID tokens and binds returning customers to issuer and subject. Set `ENV=production` and `ALLOW_DEMO_AUTH=false` for a pilot using verified sign-in.
+
+| Setting | Service | Purpose |
+|---|---|---|
+| `OIDC_ISSUER`, `OIDC_JWKS_URL`, `OIDC_AUDIENCE` | Core | Trusted HTTPS issuer, signing-key URL and public client ID |
+| `OIDC_REVIEWER_SUBJECTS` | Core | Comma-separated reviewer subject allowlist |
+| `VITE_OIDC_ISSUER`, `VITE_OIDC_CLIENT_ID` | Web build | Browser discovery and public client ID. Compose derives these from core configuration |
+| `OIDC_CONNECT_ORIGIN` | nginx | Exact HTTPS discovery and token origins for the browser CSP. On Vercel add those origins to `connect-src` in `vercel.json` |
+| `REDIS_URL` | Agents, conversation and core | Shared private Redis across replicas, provisioned by Compose |
+| `MODEL_CALLS_PER_MINUTE`, `MODEL_MAX_CONCURRENT` | Agents | Per-provider request budget and simultaneous model-call limit |
+| `AGENT_TURN_DEADLINE_SECONDS` | Agents | Time available for routing and worker execution |
+
+Financial and verification answers are rendered from typed fields. Optional FAQ wording and router calls share the provider budget. Rules and templates take over when model capacity is unavailable. Legacy model-generated greetings are disabled with Redis and in production. Worker timeouts preserve completed sibling results.
+
+Core reserves an idempotency key inside the underwriting transaction. Chat keeps an application-attempt identity across retries and creates a new one for restarts or superseding requests. Optimistic version checks reject stale session writes. New tables hold quotes, identity bindings, consent, review records, attempt IDs and turn traces.
+
+To verify a hosted deployment with synthetic accounts, set `CORE_URL`, `CONVERSATION_URL`, `PILOT_APPLICANT_TOKEN`, `PILOT_REVIEWER_TOKEN` and `PILOT_PHONE`. Run `python scripts/company_demo.py` with a fresh verified applicant. This creates an application and a reviewed document in the target system. Bureau verification, bank feeds and fund disbursement remain external integrations.
 
 ## Screenshots
 
@@ -77,12 +116,12 @@ A fair question about any demo, so here is the answer without hedging.
 | Credit policy, EMI, FOIR, limit rules | **Real code.** Deterministic, versioned, unit-tested. No model involved. |
 | Application, decision, document, audit records | **Real rows** in Postgres/SQLite, written per request and readable afterwards. |
 | JWT auth, ownership checks, signed download links | **Real.** Enforced by the API, covered by tests. |
-| Salary-slip extraction | **Real parsing** of the PDF text layer with an honest confidence score. No OCR, so scans go to review instead of being guessed. |
+| Salary-slip extraction | **Real parsing** of the PDF text layer with an honest confidence score. Optional OCR handles scans; low-confidence readings enter underwriter review. |
 | Assistant wording | **Templates**, deterministic. The LLM is optional and disabled by default; when enabled it may only reword, never quote a figure. |
 | Customer records | **Stored, not hardcoded** — but the ten demo profiles are seeded on first boot. Anyone can register and use their own details; see below. |
 | Credit score | **Self-declared** at signup in this build, and recorded as such. A production deployment pulls it from a bureau. |
 | Pre-approved limit | **Offered** for seeded demo customers; **derived** (6 × declared income, capped by policy) for self-registered ones, and labelled indicative. |
-| KYC | **Demo provider**: matches the phone against the record instead of sending an OTP. |
+| KYC | Verified OIDC mobile enrollment or demo phone matching. |
 | Contact-us channels | **Placeholders.** Messages are stored with a reference, but nobody is paged. |
 | Bureau pull, disbursal, e-sign | **Not implemented.** |
 
@@ -397,7 +436,7 @@ be explained months later without reconstruction.
 ### Model keys
 - For Docker Compose, copy `.env.example` to the root `.env` and configure the shared service secrets. To use five model credentials, set `LLM_PROVIDER=gemini`, `GOOGLE_GENAI_USE_VERTEXAI=false`, and `REQUIRE_ROLE_KEYS=true`. Set `GOOGLE_API_KEY_ROUTER`, `GOOGLE_API_KEY_ELIGIBILITY`, `GOOGLE_API_KEY_INTEREST`, `GOOGLE_API_KEY_DOCUMENT`, and `GOOGLE_API_KEY_FAQ`. For Groq use `LLM_PROVIDER=groq` and the corresponding `GROQ_API_KEY_*` variables. Choose a model available to your account using `GEMINI_MODEL` or `GROQ_MODEL`. Strict mode checks all five credentials for presence and uniqueness at startup. Vertex AI uses the runtime service account and requires strict key mode to be off.
 - Run `docker compose up --build`, open `http://localhost:8080/login`, choose **Create account**, and supply a new profile. Try “Am I eligible for 5 lakh over 36 months, what is the EMI, which documents do I need, and what is your privacy policy?” The router can select up to four workers in one turn. LangGraph executes the selected workers concurrently, then combines their results. A direct application request goes through core policy.
-- For limited free-tier quota set `MODEL_WORKER_REPLIES=false` and leave `LLM_ENABLED=false`. Only the router in the agent graph calls the model. Each selected worker still runs its tools and formats the result. To use a model for worker replies as well, set `MODEL_WORKER_REPLIES=true`. Keys within the same Gemini project or Groq organization share provider limits. For free-tier testing use fictional applicant details.
+- For limited free-tier quota set `MODEL_WORKER_REPLIES=false` and leave `LLM_ENABLED=false`. Only the router in the agent graph calls the model. Each selected worker still runs its tools and formats the result. To enable model wording for sourced FAQ replies, set `MODEL_WORKER_REPLIES=true`. Keys within the same Gemini project or Groq organization share provider limits. For free-tier testing use fictional applicant details.
 - **`scripts/check_groq_keys.py`** probes every configured key with a one-token call, prints the
   model and latency per role, warns if two roles share a key, and names the models your account
   can actually use when one 404s.
@@ -436,7 +475,7 @@ Two kinds, kept apart: what the build contains (countable) and what it does at r
 | Agent graph | 1 router → 4 workers → 1 synthesiser |
 | Workflow | 6 states, 10 events, 26 legal transitions, 54-combination routing matrix |
 | Credit policy | 1 versioned module; 9 reason codes; EMI and FOIR in integer paise |
-| Tests | 308 backend tests (307 passed, one optional OCR skip) — 82 core · 115 conversation · 8 CRM · 11 OfferMart · 23 MCP · 69 agents |
+| Tests | Six backend suites and the complete company demo |
 | Coverage | core 89% · conversation 86% · agents 88% · mcp-server 85% · CRM 91% · OfferMart 78% |
 | Lint and types | ruff clean; mypy clean on 80 files; `tsc` and eslint clean |
 | Screenshots | 34, captured from a running stack |
@@ -502,13 +541,13 @@ RBI inspection would ask for, and it exists by construction rather than by repor
 model. The language model cannot approve, decline, or invent a figure; there are tests for each of
 those. Policy changes are reviewable diffs, not prompt edits.
 
-**Engineering.** Six services with 308 backend tests and no cross-service imports; the seams are HTTP
+**Engineering.** Six services with regression tests and no cross-service imports; the seams are HTTP
 contracts, so any one of them can be replaced. The conversation layer can be deleted and the core
 still lends.
 
 ### What it does not do
 
-It does not verify identity (no OTP, no bureau pull — the score is self-declared), it does not
+Production enrollment verifies an OIDC identity and a verified phone claim. The pilot uses a self-declared credit score, does not
 disburse, and it has not been through a security review or a penetration test. The CRM and offer
 engine are stand-ins with real contracts, not vendor integrations. Nothing here should be pointed
 at a real customer without the list in
@@ -826,21 +865,21 @@ checks) and **Dependabot** for the three dependency manifests.
 Stated plainly, because a README that hides them is worse than one that is short.
 
 1. **Demo login is not authentication of a person.** It proves knowledge of a customer id and
-   phone number. Production needs OTP plus a KYC vendor, and `ENV=production` refuses to start
+   phone number. Production uses the configured OIDC provider. Full KYC requires a vendor. The service refuses to start in production
    with demo auth on.
 2. **The credit score is self-declared.** No bureau is queried. The record says so
    (`score_source = self_declared`) and the UI marks it, but a real deployment must replace this
    with a bureau pull before any money moves.
-3. **Extraction reads text layers only.** Scanned documents go to review; nothing is invented.
+3. **Scanned documents depend on OCR availability.** Inconclusive evidence goes to underwriter review.
    The extractor interface is the seam for OCR or a vendor.
 4. **No bureau, no disbursal, no notifications.** Support messages are stored but not routed to
    any queue or inbox. The sanction letter is a simulation and says so.
-5. **Rate limiting is per process.** Correct for one instance; use Redis for a fleet.
+5. **Fleet limits require Redis.** Configure the shared Redis endpoint for replicated services.
 6. **No migration history.** Schema comes from the models; add Alembic before the first change
    that must be applied to live data.
 7. **No retention job.** Sessions and audit rows grow without bound; a purge policy is
    outstanding work for DPDP erasure.
-8. **No OpenTelemetry traces yet.** Structured logs and Prometheus metrics only.
+8. **Trace export.** The conversation service persists turn, worker and tool traces. OpenTelemetry export remains open.
 9. **Web tests cover formatting only.** The flow is covered end-to-end at the API level; a
    Playwright suite is the next step.
 

@@ -1,0 +1,138 @@
+"""Underwriter queue. Reviewer identities are separate from customer and service tokens."""
+
+from __future__ import annotations
+
+import hashlib
+import os
+from typing import Annotated, Literal
+
+from fastapi import APIRouter, Depends, HTTPException, Response
+from pydantic import BaseModel, Field
+from sqlalchemy import select, update
+from sqlalchemy.orm import Session
+
+from ..config import Settings, get_settings
+from ..db import get_db
+from ..models import Application, Document, ReviewRecord
+from ..services import audit, underwriting
+from ..storage import build_store
+from .applications import _application_view
+from .identity import identity
+
+router = APIRouter(prefix="/v1/reviews")
+
+
+def reviewer(claims: dict = Depends(identity)) -> str:
+    allowed = os.environ.get("OIDC_REVIEWER_SUBJECTS", "").split(",")
+    if not claims["sub"] or claims["sub"] not in allowed:
+        raise HTTPException(403, "Underwriter role required.")
+    return claims["sub"]
+
+
+class Resolution(BaseModel):
+    action: Literal["confirm", "correct", "replace"]
+    income_rupees: Annotated[int | None, Field(ge=1, le=10_000_000)] = None
+    reason: Annotated[str, Field(min_length=3, max_length=500)]
+
+
+def pending(db: Session):
+    return (
+        select(Document)
+        .join(Application)
+        .where(
+            Document.requires_review.is_(True),
+            Document.doc_type == "salary_slip",
+            Application.status == "document_required",
+        )
+    )
+
+
+@router.get("")
+def queue(_: str = Depends(reviewer), db: Session = Depends(get_db)) -> list[dict]:
+    return [
+        {
+            "document_id": doc.id,
+            "application_id": doc.application_id,
+            "filename": doc.original_filename,
+            "confidence": doc.extraction_confidence,
+            "fields": doc.extracted_fields,
+            "referral": "Income extraction requires human verification",
+        }
+        for doc in db.scalars(pending(db).order_by(Document.created_at).limit(100))
+    ]
+
+
+@router.get("/{document_id}/file")
+def file(
+    document_id: str,
+    _: str = Depends(reviewer),
+    db: Session = Depends(get_db),
+    settings: Settings = Depends(get_settings),
+) -> Response:
+    doc = db.scalar(pending(db).where(Document.id == document_id))
+    if not doc:
+        raise HTTPException(404, "Pending document missing.")
+    return Response(
+        build_store(settings).read(doc.storage_key),
+        media_type=doc.content_type,
+        headers={"Cache-Control": "no-store", "Content-Disposition": "attachment"},
+    )
+
+
+@router.post("/{document_id}")
+def resolve(
+    document_id: str,
+    body: Resolution,
+    actor: str = Depends(reviewer),
+    db: Session = Depends(get_db),
+    settings: Settings = Depends(get_settings),
+) -> dict:
+    doc = db.scalar(pending(db).where(Document.id == document_id).with_for_update())
+    if not doc or not doc.application_id:
+        raise HTTPException(409, "Review is no longer pending.")
+    application = db.get(Application, doc.application_id)
+    if not application:
+        raise HTTPException(404, "Application missing.")
+    income = None
+    if body.action == "confirm":
+        income = (doc.extracted_fields or {}).get("monthly_income_paise")
+    if body.action == "correct" and body.income_rupees:
+        income = body.income_rupees * 100
+    if body.action != "replace" and (not isinstance(income, int) or income <= 0):
+        raise HTTPException(422, "Supply a corrected monthly income or request replacement.")
+    claimed = db.scalar(
+        update(Document)
+        .where(Document.id == doc.id, Document.requires_review.is_(True))
+        .values(requires_review=False)
+        .returning(Document.id)
+    )
+    if not claimed:
+        raise HTTPException(409, "Another reviewer completed the review.")
+    db.add(
+        ReviewRecord(
+            document_id=doc.id,
+            application_id=application.id,
+            reviewer=actor,
+            action=body.action,
+            reason=body.reason,
+            income_paise=income,
+        )
+    )
+    doc.verified_income_paise = income
+    if body.action == "replace":
+        doc.status = "replacement_requested"
+        doc.application_id = None  # the review retains the link; a replacement can now be uploaded
+    else:
+        doc.status = "extracted"
+        db.flush()
+        underwriting.evaluate(db, settings=settings, application=application, reviewed=doc)
+    audit.record(
+        db,
+        actor_type="underwriter",
+        actor_id=hashlib.sha256(actor.encode()).hexdigest(),
+        action="document.reviewed",
+        entity_type="document",
+        entity_id=doc.id,
+        metadata={"action": body.action, "application_id": application.id},
+    )
+    return {"application": _application_view(db, application), "action": body.action}

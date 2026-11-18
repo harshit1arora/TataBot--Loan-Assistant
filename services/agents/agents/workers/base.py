@@ -4,8 +4,10 @@ from __future__ import annotations
 import json
 import logging
 
+from ..budget import BudgetUnavailable, model_call
 from ..llm import LLM, LlmUnavailable, prose_is_grounded
 from ..mcp_client import McpToolbox, ToolFailure
+from ..telemetry import active_worker
 
 logger = logging.getLogger("agents.worker")
 
@@ -36,19 +38,37 @@ class Worker:
             "Write rupee amounts with Indian digit grouping (₹5,00,000, not ₹500,000)."
         )
         try:
-            prose = await self.llm.complete(prompt, system=system)
+            async with model_call(self.llm.name, self.toolbox.settings.llm_timeout_seconds):
+                prose = await self.llm.complete(prompt, system=system)
+        except BudgetUnavailable:
+            if (record := active_worker.get()) is not None:
+                record["fallback"] = "budget_unavailable"
+            return fallback
         except (LlmUnavailable, Exception) as exc:  # noqa: BLE001 - never fail on the model
+            if (record := active_worker.get()) is not None:
+                record["fallback"] = "model_unavailable"
             logger.info("%s: model unavailable (%s)", self.name, type(exc).__name__)
             return fallback
 
         if not prose_is_grounded(prose, json.dumps(tool_output, default=str)):
+            if (record := active_worker.get()) is not None:
+                record["fallback"] = "ungrounded_reply"
             logger.warning("%s: discarded model prose with ungrounded figures", self.name)
             return fallback
+        if (record := active_worker.get()) is not None:
+            record["wording"] = self.llm.name
+            cfg = self.toolbox.settings
+            record["model"] = cfg.gemini_model if self.llm.name == "gemini" else cfg.groq_model
         return prose.strip()
 
     async def safe_call(self, tool: str, **arguments) -> tuple[dict | None, str | None]:
         """Returns (data, error_message). Workers degrade instead of raising."""
         try:
-            return await self.toolbox.call(tool, **arguments), None
+            data = await self.toolbox.call(tool, **arguments)
+            if (record := active_worker.get()) is not None:
+                record["tools"].append({"name": tool, "status": "ok"})
+            return data, None
         except ToolFailure as exc:
+            if (record := active_worker.get()) is not None:
+                record["tools"].append({"name": tool, "status": "failed"})
             return None, exc.detail

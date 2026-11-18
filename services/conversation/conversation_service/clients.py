@@ -142,6 +142,11 @@ class CoreClient:
             return None
 
     # --- customer-scoped (token forwarded) -------------------------------
+    async def issue_quote(self, customer_id: str, scenario: dict, quote: dict) -> dict:
+        return await self._request("POST", f"/internal/customers/{customer_id}/product-quote",
+                                   json={**scenario, "product": quote["product_name"],
+                                         "rate": quote["annual_rate_percent"]})
+
     async def profile(self, customer_token: str) -> dict:
         return await self._request("GET", "/v1/customers/me", customer_token=customer_token)
 

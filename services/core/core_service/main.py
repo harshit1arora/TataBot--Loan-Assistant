@@ -19,7 +19,18 @@ from .db import create_all, engine, session_scope
 from .errors import AppError
 from .logging_setup import configure_logging, get_logger, request_id_var
 from .migrations import apply_additive_migrations
-from .routers import applications, auth, customers, documents, health, internal, support
+from .routers import (
+    applications,
+    auth,
+    customers,
+    documents,
+    health,
+    identity,
+    internal,
+    quotes,
+    reviews,
+    support,
+)
 from .services import customers as customer_service
 
 settings = get_settings()
@@ -155,6 +166,9 @@ async def unhandled_error_handler(request: Request, exc: Exception) -> JSONRespo
     )
 
 
+app.include_router(quotes.router)
+app.include_router(reviews.router)
+app.include_router(identity.router)
 app.include_router(health.router)
 app.include_router(auth.router)
 app.include_router(customers.router)

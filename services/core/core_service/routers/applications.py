@@ -37,7 +37,7 @@ def _decision_view(record) -> DecisionView | None:
         reason_codes=list(record.reason_codes or []),
         emi_paise=record.emi_paise,
         tenure_months=record.tenure_months,
-        interest_rate_percent=float(record.interest_rate_percent),
+        interest_rate_percent=float((record.inputs_snapshot or {}).get("effective_rate_percent", record.interest_rate_percent)),
         policy_version=record.policy_version,
     )
 
@@ -72,6 +72,9 @@ def create_application(
     if idempotency_key:
         cached = idempotency.lookup(db, idempotency_key, endpoint, principal.customer_id)
         if cached is not None:
+            if (cached["requested_amount_paise"] != payload.requested_amount_rupees * 100
+                    or cached["tenure_months"] != payload.tenure_months):
+                raise ConflictError("This attempt already used different terms.")
             return ApplicationView.model_validate(cached)
 
     application = underwriting.create_application(
@@ -125,7 +128,7 @@ def application_status(
         "submitted": ["Your application is being assessed."],
         "document_required": ["Upload your latest salary slip to continue."],
         "approved": ["Download your sanction letter."],
-        "rejected": ["Review the reason codes, or apply again after six months."],
+        "rejected": ["Review the decision summary and contact support if the information is incorrect."],
         "sanctioned": ["Your sanction letter is ready to download."],
     }.get(application.status, [])
     stage: Literal[

@@ -98,16 +98,7 @@ class EligibilityWorker(Worker):
         else:
             fallback = f"On the current policy this would be declined: {reasons}."
 
-        answer = await self.phrase(
-            instruction=(
-                "You are the eligibility agent, speaking to the customer. Explain what the credit "
-                f"policy says about {amount_text} over {tenure} months. The outcome is {outcome}. "
-                "Speak plainly: never print internal codes such as require_document or "
-                "verified_income_document_required, and say what the customer should do next."
-            ),
-            tool_output=payload,
-            fallback=fallback,
-        )
+        answer = fallback
 
         return {
             "steps": [f"eligibility: check_eligibility -> {outcome}"],

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 
 from ..config import Settings, get_settings
@@ -45,6 +45,8 @@ def register_customer(
 ) -> RegisterCustomerResponse:
     """Self-service signup — a new customer, not one of the seeded demo set."""
     enforce(request, settings)
+    if settings.is_production:
+        raise HTTPException(403, 'Use verified enrollment.')
     customer = onboarding.register(
         db,
         settings=settings,

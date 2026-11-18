@@ -45,6 +45,7 @@ class Settings:
     llm_timeout_seconds: float = float(os.environ.get("LLM_TIMEOUT_SECONDS", "12"))
     llm_max_output_tokens: int = int(os.environ.get("LLM_MAX_OUTPUT_TOKENS", "500"))
 
+    turn_deadline_seconds: float = max(1.0, float(os.getenv("AGENT_TURN_DEADLINE_SECONDS", "32")))
     service_token: str = os.environ.get("AGENT_SERVICE_TOKEN", "agent-service-token-change-me")
     max_question_chars: int = int(os.environ.get("MAX_QUESTION_CHARS", "1000"))
     max_workers_per_turn: int = max(1, min(4, int(os.environ.get("MAX_WORKERS_PER_TURN", "4"))))

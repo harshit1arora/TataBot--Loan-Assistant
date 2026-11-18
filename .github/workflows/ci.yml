@@ -55,6 +55,12 @@ jobs:
   platform-services:
     name: crm · offermart · mcp · agents
     runs-on: ubuntu-latest
+    services:
+      redis:
+        image: redis:7-alpine
+        ports: ["6379:6379"]
+    env:
+      TEST_REDIS_URL: redis://localhost:6379/15
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -75,6 +81,9 @@ jobs:
         run: cd services/mcp-server && python -m pytest
       - name: Agent graph (includes the end-to-end flow)
         run: cd services/agents && python -m pytest
+
+      - name: Verified enrollment through underwriter approval
+        run: python scripts/demo_lab/run.py
 
   frontend:
     name: frontend

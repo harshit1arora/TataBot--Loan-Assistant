@@ -22,6 +22,8 @@ class StepView(BaseModel):
 
 
 class QueryResponse(BaseModel):
+    router_detail: dict = {}
+    worker_trace: dict = {}
     answer: str
     route: list[str]
     route_reason: str

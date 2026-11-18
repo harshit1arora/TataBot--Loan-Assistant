@@ -20,6 +20,8 @@ class ChatRequest(BaseModel):
 
 
 class ChatResponse(BaseModel):
+    quote_id: str | None = None
+    trace_id: str | None = None
     session_id: str
     state: str
     reply: str
@@ -77,6 +79,7 @@ class TraceStep(BaseModel):
 
 
 class SessionTrace(BaseModel):
+    turns: list[dict] = []
     """The routing history of one conversation, newest last."""
 
     session_id: str

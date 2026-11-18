@@ -175,3 +175,32 @@ class ExtractionJob(Base):
     last_error: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
+
+class PilotQuote(Base):
+    __tablename__ = "pilot_quotes"
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=_uuid)
+    customer_id: Mapped[str] = mapped_column(ForeignKey("customers.id"), index=True)
+    terms: Mapped[dict] = mapped_column(JSON)
+    expires_at: Mapped[int] = mapped_column(Integer)
+    application_id: Mapped[str | None] = mapped_column(ForeignKey("applications.id"), unique=True)
+    accepted: Mapped[bool] = mapped_column(Boolean, default=False)
+
+
+class ReviewRecord(Base):
+    __tablename__ = "document_reviews"
+    document_id: Mapped[str] = mapped_column(ForeignKey("documents.id"), primary_key=True)
+    application_id: Mapped[str] = mapped_column(ForeignKey("applications.id"), index=True)
+    reviewer: Mapped[str] = mapped_column(String(255))
+    action: Mapped[str] = mapped_column(String(20))
+    reason: Mapped[str] = mapped_column(Text)
+    income_paise: Mapped[int | None] = mapped_column(Integer)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class VerifiedIdentity(Base):
+    __tablename__ = "verified_identities"
+    identity_hash: Mapped[str] = mapped_column(String(64), primary_key=True)
+    customer_id: Mapped[str] = mapped_column(ForeignKey("customers.id"), unique=True)
+    issuer: Mapped[str] = mapped_column(String(512))
+    consent_version: Mapped[str] = mapped_column(String(32))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)

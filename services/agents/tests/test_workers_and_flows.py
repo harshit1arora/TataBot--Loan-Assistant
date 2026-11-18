@@ -149,14 +149,15 @@ async def test_a_model_that_invents_a_number_is_overruled(toolbox):
     assert "16,607" in result["answer"], "the tool's figure must survive"
 
 
-async def test_grounded_prose_is_kept(toolbox):
+async def test_pricing_answer_is_rendered_from_the_tool(toolbox):
     llm = FakeLLM(
         route={"agents": ["interest"], "reason": "emi"},
         prose="For 5,00,000 over 36 months the EMI works out to 16,607.15 at 12% a year.",
     )
     graph = AgentGraph(toolbox.settings, llm, toolbox)
     result = await graph.run("emi on 5 lakh for 36 months", "CUST001")
-    assert result["answer"].startswith("For 5,00,000")
+    assert "16,607" in result["answer"]
+    assert "works out to" not in result["answer"]
 
 
 def test_the_guard_itself():
@@ -242,9 +243,8 @@ async def test_answers_use_indian_grouping(graph):
 
 
 # --- the guard must not punish a model for quoting the loan it was asked about
-async def test_model_prose_may_quote_the_requested_amount(toolbox):
-    """Regression: the amount was absent from the guard payload, so every answer that
-    mentioned the loan was discarded and the template used instead."""
+async def test_model_cannot_reverse_policy_outcome(toolbox):
+    """Even a number-free approval cannot override a document-required outcome."""
     captured: dict = {}
 
     class QuotingLLM:
@@ -253,7 +253,7 @@ async def test_model_prose_may_quote_the_requested_amount(toolbox):
 
         async def complete(self, prompt, *, system=""):
             captured["prompt"] = prompt
-            return "For a ₹5,00,000 loan over 36 months you need to verify your income first."
+            return "You are approved. No document is required."
 
         async def complete_json(self, prompt, *, system=""):
             return {"agents": ["eligibility"], "reason": "test"}
@@ -265,9 +265,8 @@ async def test_model_prose_may_quote_the_requested_amount(toolbox):
     result = await worker.run({"question": "can I get 5 lakh for 36 months?", "customer_id": customer_id})
 
     answer = result["results"]["eligibility"]["answer"]
-    assert answer.startswith("For a ₹5,00,000 loan"), "grounded prose should be kept"
-    assert "amount_rupees" in captured["prompt"], "the request must be in the payload"
-    assert "reasons_readable" in captured["prompt"], "internal codes should be labelled for the model"
+    assert "salary slip" in answer.lower()
+    assert not captured, "the policy outcome must be rendered from typed fields"
 
 
 async def test_model_prose_is_still_rejected_when_it_invents_a_figure(toolbox):

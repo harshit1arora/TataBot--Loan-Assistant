@@ -85,7 +85,7 @@ def get_owned(db: Session, document_id: str, customer_id: str) -> Document:
 def process_next_job(db: Session, *, settings: Settings, store: ObjectStore) -> str | None:
     """Worker entry point: extract one pending salary slip. Returns the document id."""
     job = db.execute(
-        select(ExtractionJob).where(ExtractionJob.status == "pending").order_by(ExtractionJob.created_at)
+        select(ExtractionJob).where(ExtractionJob.status == "pending").order_by(ExtractionJob.created_at).with_for_update(skip_locked=True)
     ).scalars().first()
     if job is None:
         return None
@@ -94,7 +94,10 @@ def process_next_job(db: Session, *, settings: Settings, store: ObjectStore) -> 
     job.attempts += 1
     db.flush()
 
-    document = db.get(Document, job.document_id)
+    document = db.scalar(select(Document).where(Document.id == job.document_id).with_for_update())
+    if document is not None and document.status != "stored":
+        job.status = "done"
+        return document.id
     if document is None:
         job.status = "failed"
         job.last_error = "document missing"
@@ -171,6 +174,9 @@ def process_now(
     from ..extractors import build_extractor
     from ..ocr import build_ocr
 
+    db.refresh(document, with_for_update=True)
+    if document.status != "stored":
+        return document
     data = store.read(document.storage_key)
     extractor = build_extractor(
         ocr_provider=build_ocr(settings.ocr_provider),

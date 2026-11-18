@@ -15,9 +15,11 @@ import json
 import logging
 import re
 
+from .budget import BudgetUnavailable, model_call
 from .config import Settings
 from .llm import LLM, LlmUnavailable
 from .parsing import parse_amount_rupees
+from .telemetry import router_event
 
 logger = logging.getLogger("agents.router")
 
@@ -113,19 +115,27 @@ class Router:
 
     async def route(self, question: str) -> tuple[list[str], str, str]:
         """Returns (workers, reason, decided_by)."""
+        meta = router_event.get()
         if self.llm.available:
             try:
-                payload = await self.llm.complete_json(
-                    build_router_prompt(question, self.settings.max_workers_per_turn),
-                    system=ROUTER_SYSTEM,
-                )
+                async with model_call(self.llm.name, self.settings.llm_timeout_seconds):
+                    payload = await self.llm.complete_json(
+                        build_router_prompt(question, self.settings.max_workers_per_turn), system=ROUTER_SYSTEM,
+                    )
                 workers, reason = validate_route(payload, self.settings.max_workers_per_turn)
+                if meta is not None:
+                    meta["model"] = self.settings.gemini_model if self.llm.name == "gemini" else self.settings.groq_model
                 return workers, reason, f"llm:{self.llm.name}"
+            except BudgetUnavailable:
+                if meta is not None:
+                    meta["fallback"] = "budget_unavailable"
             except (LlmUnavailable, ValueError, json.JSONDecodeError) as exc:
                 logger.warning("router fell back to rules: %s", str(exc)[:120])
             except Exception as exc:  # noqa: BLE001 - a model must never break routing
                 logger.warning("router error (%s), using rules", type(exc).__name__)
 
+        if meta is not None:
+            meta.setdefault("fallback", "model_unavailable_or_invalid" if self.llm.available else "rules_configured")
         workers, reason = rule_route(question, self.settings.max_workers_per_turn)
         return workers, reason, "rules"
 

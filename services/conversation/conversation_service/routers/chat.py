@@ -9,7 +9,7 @@ from ..auth import Principal, get_principal
 from ..config import Settings, get_settings
 from ..db import get_db
 from ..errors import ConflictError, NotFoundError, ValidationAppError
-from ..models import ConversationSession, Message, Transition
+from ..models import ConversationSession, Message, Transition, TurnTrace
 from ..orchestrator import Orchestrator
 from ..schemas import (
     ChatRequest,
@@ -176,7 +176,9 @@ def session_trace(
         .all()
     )
     message_count = db.query(Message).filter(Message.session_id == session_id).count()
+    turns = db.query(TurnTrace).filter_by(session_id=session.id).order_by(TurnTrace.created_at.desc()).limit(200).all()
     return SessionTrace(
+        turns=[{'trace_id': turn.id, 'at': turn.created_at.isoformat(), **turn.detail} for turn in reversed(turns)],
         session_id=session.id,
         state=session.state,
         application_id=session.application_id,

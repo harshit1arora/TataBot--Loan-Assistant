@@ -1,6 +1,9 @@
 import { BrowserRouter, Route, Routes } from "react-router-dom";
 import { Toaster } from "@/components/ui/sonner";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
+import Scenarios from "@/pages/Scenarios";
+import Review from "@/pages/Review";
+import Identity from "@/pages/Identity";
 import Home from "@/pages/Home";
 import Login from "@/pages/Login";
 import Chat from "@/pages/Chat";
@@ -14,6 +17,9 @@ export default function App() {
     <ErrorBoundary>
       <BrowserRouter>
         <Routes>
+          <Route path="/identity" element={<Identity />} />
+          <Route path="/scenarios" element={<Scenarios />} />
+          <Route path="/review" element={<Review />} />
           <Route path="/" element={<Home />} />
           <Route path="/login" element={<Login />} />
           <Route path="/chat" element={<Chat />} />

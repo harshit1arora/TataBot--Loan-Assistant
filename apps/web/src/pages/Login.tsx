@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { ArrowRight, Loader2 } from "lucide-react";
 import { ApiError, login, registerCustomer } from "@/lib/api";
 import { formatINR } from "@/lib/format";
+import { oidc } from "@/lib/identity";
 import { LogoMark } from "@/components/Logo";
 
 const DEMO_CUSTOMERS = [
@@ -121,6 +122,8 @@ export default function Login() {
             : "Enter your details to see how the demo lending policy assesses your application."}
         </p>
 
+        {oidc && <a className="block mt-4 text-blue-800" href="/identity">Continue with verified identity</a>}
+        {(!oidc || import.meta.env.DEV) && <>
         <div className="mt-5 grid grid-cols-2 gap-1 rounded-xl bg-blue-50 p-1" role="tablist">
           {(["signin", "register"] as Mode[]).map((value) => (
             <button
@@ -341,7 +344,7 @@ export default function Login() {
               {!busy && <ArrowRight className="h-4 w-4" />}
             </button>
           </form>
-        )}
+        )}</>}
       </div>
     </main>
   );

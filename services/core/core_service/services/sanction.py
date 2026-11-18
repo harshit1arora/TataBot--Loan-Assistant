@@ -86,7 +86,7 @@ def generate(
         customer=customer,
         application=application,
         emi_paise=decision.emi_paise,
-        rate=decision.interest_rate_percent,
+        rate=(decision.inputs_snapshot or {}).get("effective_rate_percent", decision.interest_rate_percent),
         policy_version=decision.policy_version,
     )
     stored = store.save(customer.id, "application/pdf", data)

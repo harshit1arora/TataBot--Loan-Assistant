@@ -9,6 +9,7 @@ from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from sqlalchemy.orm.exc import StaleDataError
 
 from .agents_client import AgentsClient
 from .clients import CoreClient
@@ -140,6 +141,12 @@ async def unhandled_error_handler(request: Request, exc: Exception) -> JSONRespo
             }
         },
     )
+
+
+@app.exception_handler(StaleDataError)
+async def stale_turn(request: Request, exc: StaleDataError) -> JSONResponse:
+    return JSONResponse(status_code=409, content={"error": {"code": "concurrent_turn",
+        "message": "Another turn updated this session. Refresh the session before continuing."}})
 
 
 app.include_router(health.router)

@@ -100,6 +100,7 @@ export default function Chat() {
   const [decision, setDecision] = useState<DecisionView | null>(null);
   const [sanctionId, setSanctionId] = useState<string | null>(null);
   const [suggestions, setSuggestions] = useState<string[]>([]);
+  const [quoteId,setQuoteId] = useState<string>();
   const [contactOpen, setContactOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [historyKey, setHistoryKey] = useState(0);
@@ -120,6 +121,7 @@ export default function Chat() {
 
   const applyResponse = useCallback((response: ChatResponse) => {
     rememberSession(response.session_id);
+    if (response.quote_id) setQuoteId(response.quote_id);
     setState(response.state);
     setDecision(response.application?.decision ?? null);
     setSanctionId(response.sanction_document_id ?? null);
@@ -266,6 +268,7 @@ export default function Chat() {
             </div>
           </div>
           <div className="flex items-center gap-2">
+            <a href={quoteId ? "/scenarios?quote="+quoteId : "/scenarios"} className="rounded bg-white/10 px-3 py-1.5 text-sm">Compare loans</a>
             <button
               type="button"
               onClick={() => setContactOpen(true)}

@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import logging
 import re
+import uuid
 from dataclasses import dataclass, field
 
 from sqlalchemy.orm import Session
@@ -27,7 +28,15 @@ from .clients import CoreClient, CoreServiceError
 from .config import Settings
 from .errors import NotFoundError
 from .llm import LlmClient
-from .models import ConversationSession, Message, PendingAgentQuestion, SessionDocument, Transition
+from .models import (
+    ApplicationAttempt,
+    ConversationSession,
+    Message,
+    PendingAgentQuestion,
+    SessionDocument,
+    Transition,
+    TurnTrace,
+)
 from .workflow import Event, State, TransitionNotAllowed, next_state, preconditions_met
 
 logger = logging.getLogger("conversation.orchestrator")
@@ -45,12 +54,17 @@ class TurnResult:
     sanction_document_id: str | None = None
     suggested_actions: list[str] = field(default_factory=list)
     intent: str | None = None
+    quote_id: str | None = None
+    trace_id: str | None = None
+    execution: dict = field(default_factory=dict)
     agent_route: list[str] = field(default_factory=list)
     citations: list[str] = field(default_factory=list)
 
     def to_dict(self) -> dict:
         return {
             "session_id": self.session_id,
+            "trace_id": self.trace_id,
+            "quote_id": self.quote_id,
             "state": self.state.value,
             "reply": self.reply,
             "application": self.application,
@@ -144,7 +158,18 @@ class Orchestrator:
         return f"{text}\n\n{fallback}" if text else fallback
 
     # --- main entry ------------------------------------------------------
-    async def handle_message(
+    async def handle_message(self, db: Session, **kwargs) -> TurnResult:
+        result = await self._handle_message(db, **kwargs)
+        trace = TurnTrace(session_id=result.session_id, detail={
+            'intent': result.intent or 'workflow', 'state': result.state.value,
+            'route': result.agent_route, **result.execution,
+        })
+        db.add(trace)
+        db.flush()
+        result.trace_id = trace.id
+        return result
+
+    async def _handle_message(
         self,
         db: Session,
         *,
@@ -154,6 +179,8 @@ class Orchestrator:
         message: str,
     ) -> TurnResult:
         session = self.get_or_create_session(db, customer_id, session_id)
+        session.version += 1
+        db.flush()  # Claim this revision before issuing a cross-service command.
         message = (message or "").strip()[: self.settings.max_message_chars]
         self._add_message(db, session, "customer", message)
 
@@ -244,6 +271,15 @@ class Orchestrator:
 
         reply = result.get("answer") or replies.agents_unavailable()
         route = result.get("route") or []
+        quote_id = None
+        interest = result.get("data", {}).get("interest", {})
+        if interest.get("request") and interest.get("quote"):
+            try:
+                quote = await self.core.issue_quote(customer_id, interest["request"], interest["quote"])
+                quote_id = quote["quote_id"]
+                reply += "\n\nYour saved quote is available in Compare loans. Review any change in terms before applying."
+            except CoreServiceError:
+                reply += "\n\nThe application quote is unavailable; the product estimate is indicative."
         if "amount" in (result.get("needs_input") or []):
             db.add(PendingAgentQuestion(session_id=session.id, question=message))
         # The worker already asks for anything it is missing (amount, tenure), so do not
@@ -256,6 +292,8 @@ class Orchestrator:
             reply=reply,
             intent="agents",
             agent_route=route,
+            quote_id=quote_id,
+            execution={"router_detail": result.get("router_detail", {}), "router": result.get("decided_by", "unknown"), "workers": result.get("worker_trace", {})},
             citations=result.get("citations") or [],
         )
 
@@ -277,6 +315,7 @@ class Orchestrator:
         latest = db.get(SessionDocument, session.id)
         if latest:
             db.delete(latest)
+        db.merge(ApplicationAttempt(session_id=session.id, attempt_id=uuid.uuid4().hex))
         session.application_id = None
         session.requested_amount_paise = None
         session.tenure_months = None
@@ -303,11 +342,12 @@ class Orchestrator:
         db.flush()
 
         try:
+            attempt = db.get(ApplicationAttempt, session.id)
             application = await self.core.create_application(
                 customer_token=customer_token,
                 amount_rupees=parsed.rupees,
                 tenure_months=tenure,
-                idempotency_key=f"{session.id}:{parsed.rupees}:{tenure}",
+                idempotency_key=attempt.attempt_id if attempt else session.id,
             )
         except CoreServiceError as exc:
             return self._fail(db, session, exc)
@@ -366,7 +406,18 @@ class Orchestrator:
         )
 
     async def _on_awaiting_document(self, db, session, customer_token, message) -> TurnResult:
-        if parse_amount(message):
+        if session.application_id:
+            try:
+                application = await self.core.application(customer_token, session.application_id)
+            except CoreServiceError as exc:
+                return self._fail(db, session, exc)
+            if application["status"] in {"approved", "sanctioned", "rejected"}:
+                self._advance(db, session, Event.DOCUMENT_RECEIVED)
+                return await self._apply_outcome(db, session, customer_token, application)
+        parsed = parse_amount(message)
+        if parsed and (parsed.rupees * 100 != session.requested_amount_paise
+                       or (parse_tenure(message) or DEFAULT_TENURE_MONTHS) != session.tenure_months):
+            db.merge(ApplicationAttempt(session_id=session.id, attempt_id=session.application_id))
             # A new request supersedes the pending one.
             self._advance(db, session, Event.AMOUNT_PROVIDED)
             return await self._on_amount(db, session, customer_token, message)

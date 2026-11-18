@@ -17,6 +17,18 @@
   },
   "rewrites": [
     {
+      "source": "/identity",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/scenarios",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/review",
+      "destination": "/index.html"
+    },
+    {
       "source": "/chat",
       "has": [
         {

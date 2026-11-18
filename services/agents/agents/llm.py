@@ -65,7 +65,7 @@ class GroqLLM:
             try:
                 from groq import AsyncGroq
 
-                self._client = AsyncGroq(api_key=self._api_key)
+                self._client = AsyncGroq(api_key=self._api_key, max_retries=0)
             except Exception as exc:  # noqa: BLE001 - a missing SDK must not break the app
                 logger.warning("groq unavailable: %s", type(exc).__name__)
                 self.available = False

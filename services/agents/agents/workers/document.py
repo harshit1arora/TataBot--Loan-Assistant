@@ -52,13 +52,7 @@ class DocumentWorker(Worker):
             else:
                 fallback = f"That document is {document['status']} but has not produced verified income."
 
-            answer = await self.phrase(
-                instruction="You are the document agent. Report the verification state.",
-                tool_output={key: document.get(key) for key in (
-                    "status", "verified_income_paise", "extraction_confidence", "requires_review"
-                )},
-                fallback=fallback,
-            )
+            answer = fallback
             return {
                 "steps": [f"document: get_document_verification -> {document['status']}"],
                 "results": {
@@ -94,11 +88,7 @@ class DocumentWorker(Worker):
                 + faq_answer
             ).strip()
 
-        answer = await self.phrase(
-            instruction="You are the document agent. Explain which documents are needed and why.",
-            tool_output=payload,
-            fallback=fallback,
-        )
+        answer = fallback
         return {
             "steps": ["document: explained requirements"],
             "results": {
