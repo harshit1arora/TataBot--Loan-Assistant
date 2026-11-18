@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from functools import lru_cache
 
-from pydantic import Field
+from pydantic import AliasChoices, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -30,7 +30,9 @@ class Settings(BaseSettings):
     core_timeout_seconds: float = 5.0
     core_max_retries: int = 2
     core_client_id: str = "conversation-service"
-    core_client_secret: str = Field(min_length=16)
+    core_client_secret: str = Field(
+        min_length=16, validation_alias=AliasChoices("core_client_secret", "service_client_secret")
+    )
 
     # --- llm -------------------------------------------------------------
     llm_enabled: bool = False
@@ -45,7 +47,10 @@ class Settings(BaseSettings):
     # being treated as an application step. The deterministic flow is untouched.
     agents_enabled: bool = True
     agents_base_url: str = "http://localhost:8004"
-    agents_service_token: str = "agent-service-token-change-me"  # noqa: S105 - dev default
+    agents_service_token: str = Field(
+        default="agent-service-token-change-me",
+        validation_alias=AliasChoices("agent_service_token", "agents_service_token"),
+    )
     agents_timeout_seconds: float = 20.0
 
     # --- http ------------------------------------------------------------

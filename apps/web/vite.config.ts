@@ -14,7 +14,11 @@ export default defineConfig({
       "/auth": { target: CORE, changeOrigin: true },
       "/v1": { target: CORE, changeOrigin: true },
       "/download": { target: CORE, changeOrigin: true },
-      "/chat": { target: CONVERSATION, changeOrigin: true },
+      "/chat": {
+        target: CONVERSATION,
+        changeOrigin: true,
+        bypass: (request) => request.method === "GET" ? "/index.html" : undefined,
+      },
       "/sessions": { target: CONVERSATION, changeOrigin: true },
     },
   },

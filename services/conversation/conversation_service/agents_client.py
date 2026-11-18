@@ -22,8 +22,9 @@ class AgentsUnavailable(RuntimeError):
 
 
 class AgentsClient:
-    def __init__(self, settings: Settings) -> None:
+    def __init__(self, settings: Settings, transport: httpx.AsyncBaseTransport | None = None) -> None:
         self.settings = settings
+        self.transport = transport
         self._failures = 0
         self._opened_at: float | None = None
 
@@ -54,6 +55,7 @@ class AgentsClient:
         for attempt in range(2):
             try:
                 async with httpx.AsyncClient(
+                    transport=self.transport,
                     base_url=self.settings.agents_base_url,
                     timeout=httpx.Timeout(self.settings.agents_timeout_seconds),
                 ) as client:

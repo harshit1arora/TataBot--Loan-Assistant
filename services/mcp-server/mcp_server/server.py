@@ -142,10 +142,10 @@ async def get_customer_summary(customer_id: str) -> dict:
 
 
 @mcp.tool
-async def get_document_verification(document_id: str) -> dict:
+async def get_document_verification(document_id: str, customer_id: str) -> dict:
     """Verification state of an uploaded document: status, confidence, verified income."""
     try:
-        return await upstreams.core_document(document_id)
+        return await upstreams.core_document(document_id, customer_id)
     except UpstreamError as exc:
         raise _tool_error(exc) from exc
 

@@ -25,8 +25,9 @@ configure_logging(settings.log_level, settings.service_name)
 logger = get_logger("conversation.app")
 
 
-@asynccontextmanager
-async def lifespan(app: FastAPI):
+def initialize(app: FastAPI) -> None:
+    if hasattr(app.state, 'orchestrator'):
+        return
     create_all()
     app.state.orchestrator = Orchestrator(
         settings, CoreClient(settings), LlmClient(settings), AgentsClient(settings)
@@ -35,7 +36,13 @@ async def lifespan(app: FastAPI):
         "startup complete",
         extra={"event": "startup", "llm_enabled": app.state.orchestrator.llm.enabled},
     )
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    initialize(app)
     yield
+    del app.state.orchestrator
     logger.info("shutdown", extra={"event": "shutdown"})
 
 
@@ -67,6 +74,7 @@ async def request_context(request: Request, call_next):
     token = request_id_var.set(request_id)
     started = time.perf_counter()
     try:
+        initialize(request.app)
         response = await call_next(request)
     finally:
         request_id_var.reset(token)

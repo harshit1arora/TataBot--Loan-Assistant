@@ -171,3 +171,14 @@ def test_the_graph_gives_each_worker_its_own_client(toolbox):
     for name, worker in graph.workers.items():
         assert worker.llm is llms[name], f"{name} did not get its own client"
     assert graph.llm_summary()["router"] == "groq"
+
+
+def test_parallel_workers_can_both_request_an_amount(client):
+    response = client.post(
+        "/agent/query",
+        json={"customer_id": "CUST001", "question": "Am I eligible and what is the EMI?"},
+        headers=AGENT_TOKEN,
+    )
+    assert response.status_code == 200
+    assert set(response.json()["route"]) == {"eligibility", "interest"}
+    assert response.json()["needs_input"] == ["amount"]

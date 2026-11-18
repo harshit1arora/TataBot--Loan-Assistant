@@ -18,13 +18,13 @@ class DocumentWorker(Worker):
         customer_id = state.get("customer_id")
         document_id = state.get("document_id")
 
-        if document_id is None:
-            match = DOC_ID.search(question)
-            document_id = match.group(1) if match else None
+        match = DOC_ID.search(question)
+        if match:
+            document_id = match.group(1)
 
-        if document_id:
+        if document_id and customer_id:
             document, error = await self.safe_call(
-                "get_document_verification", document_id=document_id
+                "get_document_verification", document_id=document_id, customer_id=customer_id
             )
             if error or document is None:
                 return {

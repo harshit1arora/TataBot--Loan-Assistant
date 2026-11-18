@@ -69,9 +69,10 @@ class Upstreams:
         *,
         json: dict | None = None,
         headers: dict | None = None,
+        params: dict | None = None,
     ) -> Any:
         async with self._client(service, base_url) as client:
-            response = await client.request(method, path, json=json, headers=headers or {})
+            response = await client.request(method, path, json=json, headers=headers or {}, params=params)
         if response.status_code >= 400:
             detail = "request failed"
             try:
@@ -188,13 +189,14 @@ class Upstreams:
             headers={"Authorization": f"Bearer {token}"},
         )
 
-    async def core_document(self, document_id: str) -> dict:
+    async def core_document(self, document_id: str, customer_id: str) -> dict:
         token = await self._core_service_token()
         return await self._call(
             "core",
             self.settings.core_base_url,
             "GET",
             f"/internal/documents/{document_id}",
+            params={"customer_id": customer_id},
             headers={"Authorization": f"Bearer {token}"},
         )
 

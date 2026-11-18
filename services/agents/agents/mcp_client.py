@@ -30,7 +30,6 @@ class McpToolbox:
     def __init__(self, settings: Settings, client_factory=None) -> None:
         self.settings = settings
         self._client_factory = client_factory
-        self.calls: list[str] = []  # trace of tools used, for the response
 
     def _make_client(self):
         if self._client_factory is not None:
@@ -52,7 +51,6 @@ class McpToolbox:
         return Client(self.settings.mcp_url)
 
     async def call(self, tool: str, **arguments: Any) -> Any:
-        self.calls.append(tool)
         try:
             async with self._make_client() as client:
                 result = await client.call_tool(tool, arguments)

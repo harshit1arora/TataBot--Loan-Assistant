@@ -62,12 +62,7 @@ jobs:
           python-version: "3.12"
       - name: Install
         run: |
-          pip install -r services/core/requirements-dev.txt
-          pip install -r services/mock-crm/requirements.txt
-          pip install -r services/mock-offermart/requirements.txt
-          pip install -r services/mcp-server/requirements.txt
-          pip install -r services/agents/requirements.txt
-          pip install ruff mypy anyio
+          pip install -r services/core/requirements-dev.txt -r services/conversation/requirements-dev.txt -r services/mock-crm/requirements.txt -r services/mock-offermart/requirements.txt -r services/mcp-server/requirements.txt -r services/agents/requirements.txt ruff mypy
       - name: Lint
         run: |
           ruff check services/mock-crm services/mock-offermart services/mcp-server services/agents

@@ -41,6 +41,20 @@ class ConversationSession(Base):
     )
 
 
+class PendingAgentQuestion(Base):
+    __tablename__ = "pending_agent_questions"
+
+    session_id: Mapped[str] = mapped_column(ForeignKey("conversation_sessions.id"), primary_key=True)
+    question: Mapped[str] = mapped_column(Text)
+
+
+class SessionDocument(Base):
+    __tablename__ = "conversation_latest_documents"
+
+    session_id: Mapped[str] = mapped_column(ForeignKey("conversation_sessions.id"), primary_key=True)
+    document_id: Mapped[str] = mapped_column(String(32))
+
+
 class Message(Base):
     __tablename__ = "messages"
 

@@ -20,31 +20,12 @@ _CONV_DB = tempfile.mkdtemp(prefix="conv-e2e-")
 os.environ["DATABASE_URL"] = f"sqlite:///{_CONV_DB}/conversation.db"
 os.environ["CORE_CLIENT_SECRET"] = "agents-service-secret-1234"   # conversation → core
 os.environ["AGENTS_ENABLED"] = "true"
-os.environ["AGENTS_SERVICE_TOKEN"] = "test-agent-token"
 
 import conversation_service.main as conv_main  # noqa: E402
-from agents.config import settings as agent_settings  # noqa: E402
-from agents.graph import AgentGraph  # noqa: E402
-from agents.llm import RuleBasedLLM  # noqa: E402
-from agents.mcp_client import McpToolbox  # noqa: E402
+from agents.main import app as agent_app  # noqa: E402
 from conftest import fresh_customer, make_salary_pdf  # noqa: E402
+from conversation_service.agents_client import AgentsClient  # noqa: E402
 from core_service.main import app as core_app  # noqa: E402
-
-
-class GraphAgents:
-    """Stands in for the HTTP hop to the agent service, calling the real graph instead."""
-
-    def __init__(self, graph: AgentGraph) -> None:
-        self.graph = graph
-
-    async def ask(self, question, customer_id, document_id=None):
-        result = await self.graph.run(question, customer_id, document_id)
-        return {
-            "answer": result.get("answer", ""),
-            "route": result.get("route", []),
-            "citations": result.get("citations", []),
-            "needs_input": result.get("needs_input", []),
-        }
 
 
 @pytest.fixture()
@@ -52,15 +33,16 @@ def chat():
     """The conversation service, wired to the in-process agent graph."""
     from fastapi.testclient import TestClient
 
-    graph = AgentGraph(agent_settings, RuleBasedLLM(), McpToolbox(agent_settings))
-    with TestClient(conv_main.app) as client:
+    with TestClient(agent_app), TestClient(conv_main.app) as client:
         # The conversation service talks to the core over HTTP; in-process here.
         from conversation_service.clients import CoreClient
 
         client.app.state.orchestrator.core = CoreClient(
             conv_main.settings, transport=httpx.ASGITransport(app=core_app)
         )
-        client.app.state.orchestrator.agents = GraphAgents(graph)
+        client.app.state.orchestrator.agents = AgentsClient(
+            conv_main.settings, transport=httpx.ASGITransport(app=agent_app)
+        )
         client.app.state.orchestrator.settings.__dict__["agents_enabled"] = True
         yield client
 
@@ -164,6 +146,9 @@ async def test_the_application_flow_is_untouched_by_delegation(chat):
         data={"doc_type": "salary_slip"},
         headers=auth,
     ).json()
+    answer = _say(chat, auth, "What is the status of my salary slip?", session_id)
+    assert answer["agent_route"] == ["document"]
+    assert "85,000" in answer["reply"]
     assert uploaded["state"] == "sanctioned"
     assert uploaded["application"]["decision"]["reason_codes"] == ["emi_within_foir"]
 
@@ -204,3 +189,14 @@ async def test_agent_failure_degrades_to_an_honest_reply(chat):
     assert answer["intent"] == "agents_unavailable"
     assert "won't guess" in answer["reply"].lower()
     assert answer["state"] == "awaiting_amount"
+
+
+async def test_numeric_followup_completes_quote(chat):
+    auth = _auth()
+    session_id = _say(chat, auth, "hello")["session_id"]
+    _say(chat, auth, "What would my EMI be?", session_id)
+    answer = _say(chat, auth, "3 lakh for 24 months", session_id)
+    assert answer["agent_route"] == ["interest"]
+    assert answer["citations"]
+    assert answer["state"] == "awaiting_amount"
+    assert answer["application"] is None

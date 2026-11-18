@@ -112,16 +112,13 @@ def process_document(
 @router.get("/documents/{document_id}", response_model=DocumentView)
 def read_document(
     document_id: str,
+    customer_id: str,
     db: Session = Depends(get_db),
     _: Principal = Depends(require_service),
 ) -> DocumentView:
-    """Verification state for a stored document, for the document agent.
-
-    Service-scoped, so there is no ownership filter — the customer-token route remains the
-    only way a customer reads their own document.
-    """
+    """Read verification state for the authenticated customer supplied by chat."""
     document = db.get(Document, document_id)
-    if document is None:
+    if document is None or document.customer_id != customer_id:
         raise NotFoundError("Document not found.")
     return DocumentView(
         document_id=document.id,

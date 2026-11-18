@@ -181,7 +181,7 @@ def main() -> int:
         try:
             health = client.get(f"{AGENTS}/health", timeout=3)
         except httpx.HTTPError:
-            print("  [skip] agents service not running (set AGENTS_URL to include it)")
+            check("agents service reachable", False, AGENTS)
         else:
             check("agents /health", health.status_code == 200)
             graph = client.get(f"{AGENTS}/agent/graph").json()
@@ -189,6 +189,15 @@ def main() -> int:
                 "graph has a router and four workers",
                 graph["entry"] == "router" and len(graph["workers"]) == 4,
             )
+            delegated = client.post(
+                f"{CONV}/chat",
+                json={"message": "Am I eligible for 2 lakh and what would the EMI be?"},
+                headers=auth,
+            )
+            body = delegated.json()
+            check("chat coordinates eligibility and interest",
+                  set(body.get("agent_route", [])) == {"eligibility", "interest"})
+            check("chat returns sources from both workers", len(body.get("citations", [])) >= 2)
             answer = client.post(
                 f"{AGENTS}/agent/query",
                 json={"question": "what is the emi on 5 lakh for 36 months", "customer_id": "CUST001"},

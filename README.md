@@ -4,11 +4,13 @@
 
 # TataBot — policy-first loan origination
 
-A conversational personal-loan origination stack built as **two services behind one origin**.
-The language model writes the words. A versioned credit policy makes the decision. Every
-figure, document and state change is traceable.
+TataBot is a personal-loan origination demo. The conversation service sends questions to a LangGraph router, which can run eligibility, interest, document, and FAQ workers together. Workers fetch facts through MCP tools. The lending core applies a versioned credit policy to application requests.
 
-**[Live demo](.)** · [Architecture](#architecture) · [Deploy on Vercel](#deploy-on-vercel) · [Run locally](#run-locally)
+The default configuration uses rule-based routing and templated replies. Set `LLM_PROVIDER` to `groq` or `gemini` and configure credentials on the agent service to enable model-backed routing and responses.
+
+[Run locally](#run-locally) · [Architecture](#architecture) · [Deploy on Vercel](#deploy-on-vercel)
+
+**Verification.** The local multi-service run passed 34 HTTP smoke checks, including a chat turn that called both eligibility and interest and returned sources from each. The backend suites passed 304 tests with one optional OCR test skipped. All five frontend tests and the production build passed. Hosted deployment and live-provider execution still need verification.
 
 > Independent engineering demonstration. Not affiliated with, endorsed by, or operated by any
 > bank or NBFC. No real customer data is processed, no bureau is queried and no credit is
@@ -431,7 +433,7 @@ Two kinds, kept apart: what the build contains (countable) and what it does at r
 | Agent graph | 1 router → 4 workers → 1 synthesiser |
 | Workflow | 6 states, 10 events, 26 legal transitions, 54-combination routing matrix |
 | Credit policy | 1 versioned module; 9 reason codes; EMI and FOIR in integer paise |
-| Tests | **303** — 82 core · 115 conversation · 8 CRM · 11 OfferMart · 23 MCP · 64 agents |
+| Tests | 305 backend tests (304 passed, one optional OCR skip) — 82 core · 115 conversation · 8 CRM · 11 OfferMart · 23 MCP · 66 agents |
 | Coverage | core 89% · conversation 86% · agents 88% · mcp-server 85% · CRM 91% · OfferMart 78% |
 | Lint and types | ruff clean; mypy clean on 80 files; `tsc` and eslint clean |
 | Screenshots | 34, captured from a running stack |
@@ -497,7 +499,7 @@ RBI inspection would ask for, and it exists by construction rather than by repor
 model. The language model cannot approve, decline, or invent a figure; there are tests for each of
 those. Policy changes are reviewable diffs, not prompt edits.
 
-**Engineering.** Six services with 303 tests and no cross-service imports; the seams are HTTP
+**Engineering.** Six services with 305 backend tests and no cross-service imports; the seams are HTTP
 contracts, so any one of them can be replaced. The conversation layer can be deleted and the core
 still lends.
 
@@ -669,6 +671,25 @@ a Python serverless function under `/api`.
 2. **No long-lived worker** → uploads are extracted inline on the request (`process_now`); the
    `worker.py` queue is only used where a process can idle.
 
+### Where the agents run
+
+The Vercel project serves the browser app, core and conversation APIs. Deploy the
+`agents`, `mcp-server`, `mock-crm` and `mock-offermart` containers on a host with
+private networking. Set `AGENTS_BASE_URL` on Vercel to the agent ingress and configure
+the same `AGENT_SERVICE_TOKEN` on both sides. Only the agent ingress needs to be
+reachable from the conversation function. Set `MCP_URL` on agents to the private MCP
+endpoint ending in `/mcp`. Set `CORE_BASE_URL` on MCP to the deployed core function
+and `CORE_CLIENT_SECRET` to the core service credential. The Compose file shows the
+private URLs and credentials for CRM and OfferMart. Alternatively, the complete Compose
+stack serves the frontend and all services together.
+
+For deployment verification, GET `/api/conversation/ready` and check both `core_service`
+and `agents`. In a demo account ask “Am I eligible for 2 lakh and what would the EMI be?”
+The chat response should include both worker names in `agent_route` and both sources in
+`citations`. A question that needs an amount can be continued with “3 lakh for 24 months”.
+An explicit application request uses the lending workflow. CRM and OfferMart are mock
+integrations. Live customer sign-in requires a production identity provider.
+
 ### Prerequisites
 
 - A Postgres database — [Neon](https://neon.tech), Supabase or Vercel Postgres. SQLite will not
@@ -698,6 +719,9 @@ Set these in **Project → Settings → Environment Variables** (Production and 
 | `S3_ENDPOINT_URL` | R2/Supabase endpoint | omit for AWS S3 |
 | `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` | bucket credentials | or use an OIDC role |
 | `ALLOWED_ORIGINS` | `https://<your-project>.vercel.app` | |
+| `CORE_CLIENT_SECRET` | same value as `SERVICE_CLIENT_SECRET` | conversation and MCP clients authenticate to core with this variable |
+| `AGENTS_BASE_URL` | HTTPS origin of the deployed agent service | deploy agents, MCP, CRM and OfferMart using the supplied containers; configure MCP to reach this core and keep the tool services private |
+| `AGENT_SERVICE_TOKEN` | random shared secret | identical on conversation and agents |
 | `CORE_BASE_URL` | `https://<your-project>.vercel.app/api/core` | how the conversation function reaches the core function |
 | `LLM_ENABLED` | `false` | templates work without a key; set `GOOGLE_API_KEY` to enable |
 
@@ -713,7 +737,7 @@ one origin, there is no CORS surface at all.
 
 ### Vercel limits worth knowing
 
-- Function memory is 1 GB and `maxDuration` 30s in `vercel.json`; a cold start plus a first
+- Function memory is 1 GB and `maxDuration` 60s in `vercel.json`; a cold start plus a first
   request can take a few seconds.
 - `psycopg` and `reportlab` are compiled wheels — the Python runtime supports them, but keep an
   eye on the 250 MB unzipped bundle limit if you add heavy dependencies.
@@ -759,13 +783,7 @@ make typecheck   # mypy + tsc
 make smoke       # end-to-end against a running stack
 ```
 
-Current state: **303 backend tests pass**, ruff and mypy clean across 50 source files, `tsc` and
-`eslint` clean on the web app, and `scripts/smoke_test.py` passes 18/18 against a live stack.
-
-The agent suite (64 tests) drives the whole chain in one process — conversation → graph → MCP
-tools → CRM/OfferMart/core — so the end-to-end flow is a test, not a claim. The conversation
-suite (111 tests) drives the **real** core application in-process, so it is an end-to-end
-test with no mocks of the business logic and no servers to start.
+The agent suite exercises the conversation API, graph, MCP tools, CRM, OfferMart and lending core in one process. The HTTP smoke test runs against separately started services and checks that chat returns both workers’ results and citations.
 
 CI (`.github/workflows/ci.yml`) runs lint, typecheck, tests and a production build for all three
 packages, plus a check that no `.env` file is ever committed.

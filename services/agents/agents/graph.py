@@ -76,6 +76,7 @@ class AgentGraph:
         return {
             "route": workers,
             "route_reason": reason,
+            "decided_by": decided_by,
             "steps": [f"router ({decided_by}): {', '.join(workers)} — {reason}"],
         }
 

@@ -33,7 +33,6 @@ class InterestWorker(Worker):
                         "\"EMI on 3 lakh for 24 months\".",
                     }
                 },
-                "needs_input": ["amount"],
             }
 
         offer, _ = (

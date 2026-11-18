@@ -33,7 +33,7 @@ def customer_token(
     phone against the record instead of sending a code, and is disabled in production.
     """
     enforce(request, settings)
-    if settings.is_production:
+    if settings.is_production or not settings.allow_demo_auth:
         raise AuthenticationError("Passwordless demo login is disabled.")
 
     customer = db.get(Customer, payload.customer_id)

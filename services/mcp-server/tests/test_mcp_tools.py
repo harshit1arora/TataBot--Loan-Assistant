@@ -139,7 +139,7 @@ async def test_system_status_reports_each_upstream(wired):
 async def test_document_tool_reports_not_found_cleanly(wired):
     async with Client(mcp) as client:
         with pytest.raises(ToolError) as excinfo:
-            await client.call_tool("get_document_verification", {"document_id": "nope"})
+            await client.call_tool("get_document_verification", {"document_id": "nope", "customer_id": "CUST001"})
     assert "core error (404)" in str(excinfo.value)
 
 

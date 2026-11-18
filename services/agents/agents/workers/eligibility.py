@@ -33,7 +33,6 @@ class EligibilityWorker(Worker):
                         "sign in, or share your customer ID.",
                     }
                 },
-                "needs_input": ["customer"],
             }
 
         if amount is None:
@@ -50,7 +49,6 @@ class EligibilityWorker(Worker):
                         f"and over how many months? Your indicative limit is {limit_text}.",
                     }
                 },
-                "needs_input": ["amount"],
             }
 
         decision, error = await self.safe_call(

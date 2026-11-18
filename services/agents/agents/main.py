@@ -13,7 +13,7 @@ from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 from typing import Annotated, Literal
 
-from fastapi import Depends, FastAPI, Header, Request
+from fastapi import Depends, FastAPI, Header, Request, Response
 from fastapi.responses import JSONResponse
 
 from .config import ROLES, key_report, settings
@@ -70,7 +70,7 @@ def health() -> HealthResponse:
 
 
 @app.get("/ready", response_model=HealthResponse)
-async def ready() -> HealthResponse:
+async def ready(response: Response) -> HealthResponse:
     """Readiness: can the graph actually see its tools?"""
     graph: AgentGraph = app.state.graph
     checks: dict[str, str] = {}
@@ -82,6 +82,8 @@ async def ready() -> HealthResponse:
     status: Literal["ok", "degraded"] = (
         "ok" if checks["mcp_tools"].startswith("ok") else "degraded"
     )
+    if status == "degraded":
+        response.status_code = 503
     return HealthResponse(
         status=status,
         service="agents",
@@ -137,9 +139,7 @@ async def query(
         answer=result.get("answer", ""),
         route=result.get("route", []),
         route_reason=result.get("route_reason", ""),
-        decided_by=result.get("steps", ["rules"])[0].split("(")[1].split(")")[0]
-        if result.get("steps") and "(" in result["steps"][0]
-        else "rules",
+        decided_by=result.get("decided_by", "rules"),
         steps=steps,
         citations=result.get("citations", []),
         needs_input=result.get("needs_input", []),

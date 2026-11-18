@@ -7,6 +7,7 @@ decision, every figure and every transition comes from the core service or from 
 from __future__ import annotations
 
 import logging
+import re
 from dataclasses import dataclass, field
 
 from sqlalchemy.orm import Session
@@ -26,7 +27,7 @@ from .clients import CoreClient, CoreServiceError
 from .config import Settings
 from .errors import NotFoundError
 from .llm import LlmClient
-from .models import ConversationSession, Message, Transition
+from .models import ConversationSession, Message, PendingAgentQuestion, SessionDocument, Transition
 from .workflow import Event, State, TransitionNotAllowed, next_state, preconditions_met
 
 logger = logging.getLogger("conversation.orchestrator")
@@ -160,6 +161,16 @@ class Orchestrator:
 
         # "Can I talk to someone?" must work in every state, and must never be mistaken
         # for a loan amount or a restart.
+        pending = db.get(PendingAgentQuestion, session.id)
+        if pending:
+            db.delete(pending)
+            db.flush()
+            # A numeric reply completes the quote. An explicit application request
+            # continues through the normal workflow below.
+            if (self.agents and self.settings.agents_enabled and parse_amount(message)
+                    and re.match(r"^(?:₹|rs\.?\s*|inr\s*)?\d", message, re.I)):
+                return await self._on_question(db, session, customer_id, f"{pending.question} {message}")
+
         if looks_like_support_request(message):
             return self._on_support(db, session)
 
@@ -217,8 +228,9 @@ class Orchestrator:
         assert self.agents is not None
         self._advance(db, session, Event.SMALLTALK)
         try:
+            latest = db.get(SessionDocument, session.id)
             result = await self.agents.ask(
-                message, customer_id, document_id=getattr(session, "last_document_id", None)
+                message, customer_id, document_id=latest.document_id if latest else None
             )
         except AgentsUnavailable:
             reply = replies.agents_unavailable()
@@ -232,6 +244,8 @@ class Orchestrator:
 
         reply = result.get("answer") or replies.agents_unavailable()
         route = result.get("route") or []
+        if "amount" in (result.get("needs_input") or []):
+            db.add(PendingAgentQuestion(session_id=session.id, question=message))
         # The worker already asks for anything it is missing (amount, tenure), so do not
         # append a second prompt here — it read as the assistant repeating itself.
 
@@ -260,6 +274,9 @@ class Orchestrator:
 
     async def _on_restart(self, db, session, customer_token) -> TurnResult:
         self._advance(db, session, Event.RESTART)
+        latest = db.get(SessionDocument, session.id)
+        if latest:
+            db.delete(latest)
         session.application_id = None
         session.requested_amount_paise = None
         session.tenure_months = None
@@ -406,6 +423,7 @@ class Orchestrator:
                 doc_type=doc_type,
                 application_id=session.application_id,
             )
+            db.merge(SessionDocument(session_id=session.id, document_id=document["document_id"]))
             document = await self.core.process_document(customer_token, document["document_id"])
         except CoreServiceError as exc:
             return self._fail(db, session, exc)

@@ -19,6 +19,7 @@ class AgentState(TypedDict):
     document_id: NotRequired[str]
     # Which workers the router chose, and why.
     route: list[str]
+    decided_by: NotRequired[str]
     route_reason: str
     # worker name -> its structured result
     results: Annotated[dict, merge_dicts]

@@ -246,7 +246,9 @@ def test_service_can_read_a_document_for_verification(client, service_headers, a
     ).json()["document_id"]
     process_extraction_jobs()
 
-    body = client.get(f"/internal/documents/{document_id}", headers=service_headers).json()
+    path = f"/internal/documents/{document_id}"
+    assert client.get(path, params={"customer_id": "CUST002"}, headers=service_headers).status_code == 404
+    body = client.get(path, params={"customer_id": "CUST001"}, headers=service_headers).json()
     assert body["status"] == "extracted"
     assert body["verified_income_paise"] == 8_500_000
     assert client.get(f"/internal/documents/{document_id}").status_code == 401

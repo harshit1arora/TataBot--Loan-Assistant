@@ -29,8 +29,16 @@ async def ready(response: Response, settings: Settings = Depends(get_settings)) 
     except Exception:  # noqa: BLE001 - readiness reports, never raises
         checks["core_service"] = "unavailable"
 
+    if settings.agents_enabled:
+        try:
+            async with httpx.AsyncClient(base_url=settings.agents_base_url, timeout=4.0) as client:
+                result = await client.get("/ready")
+            checks["agents"] = "ok" if result.is_success and result.json()["status"] == "ok" else "degraded"
+        except (httpx.HTTPError, KeyError, ValueError):
+            checks["agents"] = "unavailable"
+
     status: Literal["ok", "degraded"] = (
-        "ok" if checks["core_service"] == "ok" else "degraded"
+        "ok" if all(value == "ok" for value in checks.values()) else "degraded"
     )
     if status != "ok":
         response.status_code = 503
