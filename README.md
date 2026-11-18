@@ -8,6 +8,8 @@ TataBot is a personal-loan origination demo. The conversation service sends ques
 
 The default configuration uses rule-based routing and templated replies. Set `LLM_PROVIDER` to `groq` or `gemini` and configure credentials on the agent service to enable model-backed routing and responses.
 
+For Gemini through Vertex AI on Cloud Run, set `LLM_PROVIDER=gemini`, `GOOGLE_GENAI_USE_VERTEXAI=true`, `GOOGLE_CLOUD_PROJECT`, `GOOGLE_CLOUD_LOCATION` and `GEMINI_MODEL` on the agent service. The SDK authenticates with the Cloud Run runtime service account. Enable the Vertex AI API and grant that account Vertex AI prediction access. Select a model available in the configured location.
+
 [Run locally](#run-locally) · [Architecture](#architecture) · [Deploy on Vercel](#deploy-on-vercel)
 
 **Verification.** The local multi-service run passed 34 HTTP smoke checks, including a chat turn that called both eligibility and interest and returned sources from each. The backend suites passed 304 tests with one optional OCR test skipped. All five frontend tests and the production build passed. Hosted deployment and live-provider execution still need verification.

@@ -30,6 +30,9 @@ class Settings:
     # Groq rotates its catalogue; llama-3.3-70b-versatile is not available on every
     # account any more. gpt-oss-20b is fast enough for routing and widely available.
     groq_model: str = os.environ.get("GROQ_MODEL", "openai/gpt-oss-20b")
+    vertex_enabled: bool = os.environ.get('GOOGLE_GENAI_USE_VERTEXAI', '').lower() == 'true'
+    vertex_project: str = os.environ.get('GOOGLE_CLOUD_PROJECT', '')
+    vertex_location: str = os.environ.get('GOOGLE_CLOUD_LOCATION', 'global')
     gemini_api_key: str = os.environ.get("GOOGLE_API_KEY", "")
     gemini_model: str = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash")
     llm_timeout_seconds: float = float(os.environ.get("LLM_TIMEOUT_SECONDS", "12"))

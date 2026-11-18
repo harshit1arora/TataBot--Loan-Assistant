@@ -103,13 +103,18 @@ class GeminiLLM:
     def __init__(self, settings: Settings, role: str = "shared") -> None:
         self.settings = settings
         self.role = role
-        self.available = bool(settings.gemini_api_key)
+        self.available = bool(settings.vertex_project if settings.vertex_enabled else settings.gemini_api_key)
         self._client = None
         if self.available:
             try:
                 from google import genai
 
-                self._client = genai.Client(api_key=settings.gemini_api_key)
+                if settings.vertex_enabled:
+                    self._client = genai.Client(
+                        vertexai=True, project=settings.vertex_project, location=settings.vertex_location
+                    )
+                else:
+                    self._client = genai.Client(api_key=settings.gemini_api_key)
             except Exception as exc:  # noqa: BLE001
                 logger.warning("gemini unavailable: %s", type(exc).__name__)
                 self.available = False
