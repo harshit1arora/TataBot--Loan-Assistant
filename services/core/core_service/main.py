@@ -21,6 +21,7 @@ from .logging_setup import configure_logging, get_logger, request_id_var
 from .routers import (
     applications,
     auth,
+    bank_statement,
     customers,
     documents,
     health,
@@ -163,6 +164,7 @@ async def unhandled_error_handler(request: Request, exc: Exception) -> JSONRespo
 
 
 app.include_router(quotes.router)
+app.include_router(bank_statement.router)
 app.include_router(reviews.router)
 app.include_router(operations.router)
 app.include_router(identity.router)

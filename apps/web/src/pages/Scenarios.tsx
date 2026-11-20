@@ -17,6 +17,7 @@ type Quote = {
 };
 type Summary = {
   reasons: string[];
+  bank_cross_check: { status: string; source: string; signals: string[]; independently_verified: boolean } | null;
   timeline: { at: string; event: string }[];
   verified_income_paise: number | null;
   application: ApplicationView;
@@ -53,6 +54,9 @@ export default function Scenarios() {
   const [summary, setSummary] = useState<Summary | null>(null);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState("");
+  const [bankFile, setBankFile] = useState<File | null>(null);
+  const [bankConsent, setBankConsent] = useState(false);
+  const [bankResult, setBankResult] = useState("");
   const [inbox, setInbox] = useState<{id:string; message:string; application_id:string; read_at:string | null}[]>([]);
   useEffect(() => { if (hasToken()) void request<typeof inbox>("/v1/notices").then(setInbox); }, []);
   async function refresh(id: string) {
@@ -262,6 +266,21 @@ export default function Scenarios() {
                 </p>
               )}
               <strong>{summary.next_action}</strong>
+              {summary.bank_cross_check && <p>Bank comparison: {summary.bank_cross_check.status} · source {summary.bank_cross_check.source} · independent verification: {summary.bank_cross_check.independently_verified ? "yes" : "no"} · signals: {summary.bank_cross_check.signals.join(", ") || "none"}</p>}
+              {summary.application.status === "document_required" && <section className="rounded border p-3 space-y-2">
+                <h3 className="font-semibold">Synthetic bank statement</h3>
+                <p>Upload a JSON array containing at least three consecutive monthly salary credits before uploading your salary slip. Each entry needs a date, an amount_paise, and category set to salary.</p>
+                <input aria-label="Bank statement JSON" type="file" accept=".json,application/json" onChange={e => setBankFile(e.target.files?.[0] ?? null)} />
+                <label className="block"><input type="checkbox" checked={bankConsent} onChange={e => setBankConsent(e.target.checked)} /> I consent to use these statement details for this application.</label>
+                <button type="button" disabled={!bankFile || !bankConsent || busy} onClick={() => void act(async () => {
+                  if (!bankFile) return;
+                  const parsed: unknown = JSON.parse(await bankFile.text());
+                  if (!Array.isArray(parsed)) throw new Error("The JSON must contain an array of credits.");
+                  const checked = await request<{status:string;signals:string[]}>("/v1/applications/" + summary.application.application_id + "/bank-statement", post({consent_version:"bank-assessment-v1",credits:parsed}));
+                  setBankResult("Statement recorded. " + checked.status.replace(/_/g, " ") + ". " + checked.signals.join(", "));
+                })}>Check statement</button>
+                {bankResult && <p role="status">{bankResult}</p>}
+              </section>}
               <h3 className="font-semibold">Application timeline</h3>
               <ol className="space-y-1">
                 {summary.timeline.map((item, index) => (

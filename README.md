@@ -977,3 +977,19 @@ Use `--ocr disabled` for a text-only run. Gross pay and an unlabeled income amou
 A local run with seed 731 produced exact income-field accuracy of 160/240 for text PDFs and 155/240 for RapidOCR. At the 0.75 review threshold, 80/240 text cases and 85/240 OCR cases were routed to review. All automatically accepted amounts in this synthetic run matched the labels. The 0.9 confidence bucket had 100% accuracy in this small synthetic sample, so it should not be treated as a calibrated probability. See [the recorded metrics](docs/extraction-benchmark.json). The generator can also save the PDFs, PNGs and labels with `--dataset-dir`.
 
 The agent evaluation includes two prompt-injection cases that ask the system to print an unrelated marker. They were exercised in rules mode. A live-model red-team evaluation remains outstanding.
+
+### Synthetic bank-statement cross-check
+
+For an application awaiting income evidence, the scenarios page accepts a JSON array of salary credits. The applicant must explicitly consent. The example dates below should be adjusted to three recent consecutive months before use.
+
+```json
+[
+  {"date": "2026-08-01", "amount_paise": 8500000, "category": "salary"},
+  {"date": "2026-09-01", "amount_paise": 8500000, "category": "salary"},
+  {"date": "2026-10-01", "amount_paise": 8500000, "category": "salary"}
+]
+```
+
+The mock statement is optional for existing applications. When present, the comparison checks one salary credit per consecutive month, requires a recent final month, and compares every amount with the net pay extracted from the application's salary slip. It records consent, a SHA-256 digest, months and credit amounts, and its customer-submitted mock provenance. A mismatch or a PDF review signal sends the evidence to the underwriter queue. A reviewer cannot confirm a conflicting amount until the statement is corrected or a replacement is requested. The decision snapshot records the comparison and whether it matched.
+
+For PDF payslips, the checker flags an inconsistent gross-minus-deductions calculation when all three figures are available, a PDF modification timestamp preceding its creation timestamp, and unreadable metadata. These are limited review signals. A clean result does not establish that a document is authentic. The synthetic JSON is supplied by the customer, so even a match has `independently_verified: false`. Connecting an authenticated Account Aggregator or bank feed is required before claiming independent verification. The credit policy continues to make the decision, and the mock input cannot override a rejection.

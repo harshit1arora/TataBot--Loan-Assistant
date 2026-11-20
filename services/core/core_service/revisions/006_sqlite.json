@@ -1,0 +1,4 @@
+[
+  "CREATE TABLE IF NOT EXISTS bank_cross_checks (\n\tapplication_id VARCHAR(32) NOT NULL, \n\tcustomer_id VARCHAR(32) NOT NULL, \n\tstatement_hash VARCHAR(64) NOT NULL, \n\tcredits_paise JSON NOT NULL, \n\tmonths JSON NOT NULL, \n\tsignals JSON NOT NULL, \n\tsource VARCHAR(32) NOT NULL, \n\tconsent_version VARCHAR(32) NOT NULL, \n\tcreated_at DATETIME NOT NULL, \n\tPRIMARY KEY (application_id), \n\tFOREIGN KEY(application_id) REFERENCES applications (id), \n\tFOREIGN KEY(customer_id) REFERENCES customers (id)\n)",
+  "CREATE INDEX IF NOT EXISTS ix_bank_cross_checks_customer_id ON bank_cross_checks (customer_id)"
+]

@@ -4,6 +4,7 @@ The LLM layer has no copy of these numbers and cannot influence the outcome. Eve
 decision records the policy version it was made under, so a decision can be explained
 after the policy changes.
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -28,6 +29,7 @@ class Reason(str, Enum):
     DOCUMENT_REQUIRED = "verified_income_document_required"
     FOIR_EXCEEDED = "emi_exceeds_foir_limit"
     INCOME_UNVERIFIED = "verified_income_unavailable"
+    BANK_REVIEW_REQUIRED = "bank_evidence_review_required"
 
 
 @dataclass(frozen=True)
@@ -62,6 +64,7 @@ class Applicant:
     credit_score: int
     pre_approved_limit_paise: int
     verified_income_paise: int | None  # only from a processed income document
+    bank_review_required: bool = False
 
 
 @dataclass(frozen=True)
@@ -97,8 +100,20 @@ def decide(
         return reject(Reason.AGE_OUT_OF_RANGE)
     if applicant.credit_score < policy.min_credit_score:
         return reject(Reason.CREDIT_SCORE_BELOW_MIN)
-    if requested_amount_paise > int(applicant.pre_approved_limit_paise * policy.pre_approved_multiple):
+    if requested_amount_paise > int(
+        applicant.pre_approved_limit_paise * policy.pre_approved_multiple
+    ):
         return reject(Reason.AMOUNT_ABOVE_MAX_MULTIPLE)
+
+    if applicant.bank_review_required:
+        return Decision(
+            Outcome.REQUIRE_DOCUMENT,
+            [Reason.BANK_REVIEW_REQUIRED],
+            None,
+            policy.version,
+            policy.annual_rate_percent,
+            tenure_months,
+        )
 
     if requested_amount_paise <= applicant.pre_approved_limit_paise:
         emi = compute_emi_paise(requested_amount_paise, policy.annual_rate_percent, tenure_months)

@@ -16,7 +16,14 @@ from sqlalchemy.orm import Session
 
 from ..config import Settings, get_settings
 from ..db import get_db
-from ..models import Application, CustomerNotice, Document, ReviewAssignment, ReviewRecord
+from ..models import (
+    Application,
+    BankCrossCheck,
+    CustomerNotice,
+    Document,
+    ReviewAssignment,
+    ReviewRecord,
+)
 from ..services import audit, notifications, underwriting
 from ..storage import build_store
 from .applications import _application_view
@@ -50,6 +57,16 @@ def pending(db: Session):
     )
 
 
+def bank_summary(db: Session, doc: Document) -> dict | None:
+    from .bank_statement import result
+
+    check = db.get(BankCrossCheck, doc.application_id) if doc.application_id else None
+    if not check:
+        return None
+    income = doc.verified_income_paise or (doc.extracted_fields or {}).get("monthly_income_paise")
+    return result(check, income)
+
+
 @router.get("")
 def queue(_: str = Depends(reviewer), db: Session = Depends(get_db)) -> list[dict]:
     return [
@@ -57,6 +74,7 @@ def queue(_: str = Depends(reviewer), db: Session = Depends(get_db)) -> list[dic
             "document_id": doc.id,
             "application_id": doc.application_id,
             "filename": doc.original_filename,
+            "bank_check": bank_summary(db, doc),
             "confidence": doc.extraction_confidence,
             "fields": doc.extracted_fields,
             "owner": (
@@ -113,6 +131,18 @@ def resolve(
     db: Session = Depends(get_db),
     settings: Settings = Depends(get_settings),
 ) -> dict:
+    doc = db.scalar(pending(db).where(Document.id == document_id))
+    if not doc or not doc.application_id:
+        raise HTTPException(409, "Review is no longer pending.")
+    locked = db.scalar(
+        update(Application)
+        .where(Application.id == doc.application_id, Application.status == "document_required")
+        .values(status=Application.status)
+        .returning(Application.id)
+    )
+    if not locked:
+        raise HTTPException(409, "Review is no longer pending.")
+    db.expire(doc)
     doc = db.scalar(pending(db).where(Document.id == document_id).with_for_update())
     if not doc or not doc.application_id:
         raise HTTPException(409, "Review is no longer pending.")
@@ -129,6 +159,12 @@ def resolve(
         income = body.income_rupees * 100
     if body.action != "replace" and (not isinstance(income, int) or income <= 0):
         raise HTTPException(422, "Supply a corrected monthly income or request replacement.")
+    check = db.get(BankCrossCheck, application.id)
+    if check and body.action != "replace" and any(value != income for value in check.credits_paise):
+        raise HTTPException(
+            409,
+            "Salary credits do not match the reviewed income. Request replacement or correct the statement.",
+        )
     claimed = db.scalar(
         update(Document)
         .where(Document.id == doc.id, Document.requires_review.is_(True))

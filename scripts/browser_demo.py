@@ -1,7 +1,9 @@
 """Browser acceptance for a deployed TataBot or the isolated demo lab."""
 
 import argparse
+import json
 import os
+from datetime import UTC, datetime
 from io import BytesIO
 from pathlib import Path
 from urllib.parse import parse_qs
@@ -76,6 +78,29 @@ def run(url, local):
         slip = page.get_by_label("Salary slip")
         slip.wait_for()
         app_id = parse_qs(urlsplit(page.url).query)["application"][0]
+        now = datetime.now(UTC)
+        current = now.year * 12 + now.month - 1
+        credits = [
+            {
+                "date": f"{(current - i) // 12:04d}-{(current - i) % 12 + 1:02d}-01",
+                "amount_paise": 8500000,
+                "category": "salary",
+            }
+            for i in (3, 2, 1)
+        ]
+        page.get_by_label("Bank statement JSON").set_input_files(
+            {
+                "name": "statement.json",
+                "mimeType": "application/json",
+                "buffer": json.dumps(credits).encode(),
+            }
+        )
+        page.get_by_label("I consent to use these statement details").check()
+        with page.expect_response(
+            lambda r: urlsplit(r.url).path.endswith("/bank-statement")
+        ) as bank:
+            page.get_by_role("button", name="Check statement").click()
+        assert bank.value.ok and bank.value.json()["independently_verified"] is False
         stream = BytesIO()
         pdf = canvas.Canvas(stream)
         pdf.drawString(
@@ -101,6 +126,7 @@ def run(url, local):
         staff.get_by_role("button", name=f"browser-payroll.pdf · Application {app_id}").click(
             timeout=180000
         )
+        expect(staff.get_by_text("Bank statement:", exact=False)).to_contain_text("customer_mock")
         with staff.expect_download() as evidence:
             staff.get_by_role("button", name="Download evidence").click()
         assert Path(evidence.value.path()).read_bytes() == stream.getvalue()
@@ -113,6 +139,7 @@ def run(url, local):
         expect(staff.get_by_role("status")).to_contain_text(f"Application {app_id} is approved")
         page.get_by_role("button", name="Refresh decision").click()
         expect(page.get_by_text("Verified monthly income", exact=False)).to_contain_text("85,000")
+        expect(page.get_by_text("Bank comparison:", exact=False)).to_contain_text("matching")
         page.get_by_role("button", name="Issue sanction letter").click()
         with page.expect_download() as letter:
             page.get_by_role("button", name="Download sanction letter").click()

@@ -4,6 +4,7 @@ Everything the decision depends on is read server-side: the customer record, the
 policy, and the verified income from a stored document. The caller supplies an amount
 and a tenure and nothing else.
 """
+
 from __future__ import annotations
 
 from dataclasses import replace
@@ -13,9 +14,17 @@ from sqlalchemy.orm import Session
 
 from ..config import Settings
 from ..errors import NotFoundError, PolicyRejection
-from ..models import Application, Customer, DecisionRecord, Document, PilotQuote, ReviewRecord
+from ..models import (
+    Application,
+    BankCrossCheck,
+    Customer,
+    DecisionRecord,
+    Document,
+    PilotQuote,
+    ReviewRecord,
+)
 from ..money import paise_to_rupees, rupees_to_paise
-from ..policy import Applicant, CreditPolicy, Outcome, build_policy, decide
+from ..policy import Applicant, CreditPolicy, Outcome, Reason, build_policy, decide
 from ..services import audit
 
 
@@ -75,14 +84,20 @@ def get_owned_application(db: Session, application_id: str, customer_id: str) ->
 
 
 def latest_decision(db: Session, application_id: str) -> DecisionRecord | None:
-    return db.execute(
-        select(DecisionRecord)
-        .where(DecisionRecord.application_id == application_id)
-        .order_by(DecisionRecord.created_at.desc())
-    ).scalars().first()
+    return (
+        db.execute(
+            select(DecisionRecord)
+            .where(DecisionRecord.application_id == application_id)
+            .order_by(DecisionRecord.created_at.desc())
+        )
+        .scalars()
+        .first()
+    )
 
 
-def evaluate(db: Session, *, settings: Settings, application: Application, reviewed: Document | None = None) -> DecisionRecord:
+def evaluate(
+    db: Session, *, settings: Settings, application: Application, reviewed: Document | None = None
+) -> DecisionRecord:
     """Run the credit policy against an application and persist the decision."""
     policy: CreditPolicy = build_policy(settings)
     customer = db.get(Customer, application.customer_id)
@@ -91,24 +106,56 @@ def evaluate(db: Session, *, settings: Settings, application: Application, revie
 
     accepted = db.scalar(select(PilotQuote).where(PilotQuote.application_id == application.id))
     if accepted:
-        policy = replace(policy, annual_rate_percent=accepted.terms['rate'])
-    evidence = db.scalar(select(Document).where(Document.customer_id == customer.id, Document.doc_type == 'salary_slip', Document.status == 'extracted', Document.requires_review.is_(False), Document.verified_income_paise.is_not(None)).order_by(Document.created_at.desc()))
+        policy = replace(policy, annual_rate_percent=accepted.terms["rate"])
+    evidence = db.scalar(
+        select(Document)
+        .where(
+            Document.customer_id == customer.id,
+            Document.doc_type == "salary_slip",
+            Document.status == "extracted",
+            Document.requires_review.is_(False),
+            Document.verified_income_paise.is_not(None),
+        )
+        .order_by(Document.created_at.desc())
+    )
     if reviewed is not None:
         if reviewed.application_id != application.id or reviewed.customer_id != customer.id:
             raise ValueError("Evidence does not belong to the application")
         evidence = reviewed
     verified_income = evidence.verified_income_paise if evidence else None
-    source = 'declared'
+    source = "declared"
     if evidence:
-        source = 'underwriter_verified' if db.get(ReviewRecord, evidence.id) else 'document_extraction'
+        source = (
+            "underwriter_verified" if db.get(ReviewRecord, evidence.id) else "document_extraction"
+        )
+    cross_check = db.get(BankCrossCheck, application.id)
+    bank_status = None
+    bank_review_required = False
+    if cross_check and evidence:
+        from ..routers.bank_statement import pdf_signals, result
+        from ..storage import build_store
+
+        if evidence.content_type == "application/pdf":
+            cross_check.signals = pdf_signals(build_store(settings).read(evidence.storage_key))
+        bank_status = result(cross_check, verified_income)
+        bank_review_required = not db.get(ReviewRecord, evidence.id) and bool(
+            bank_status["status"] != "matching" or bank_status["signals"]
+        )
     applicant = Applicant(
         customer_id=customer.id,
         age=customer.age,
         credit_score=customer.credit_score,
         pre_approved_limit_paise=customer.pre_approved_limit_paise,
         verified_income_paise=verified_income,
+        bank_review_required=bank_review_required,
     )
-    decision = decide(policy, applicant, application.requested_amount_paise, application.tenure_months)
+    decision = decide(
+        policy, applicant, application.requested_amount_paise, application.tenure_months
+    )
+    if decision.reasons == [Reason.BANK_REVIEW_REQUIRED] and evidence:
+        evidence.requires_review = True
+        evidence.verified_income_paise = None
+        verified_income = None
 
     record = DecisionRecord(
         application_id=application.id,
@@ -126,6 +173,7 @@ def evaluate(db: Session, *, settings: Settings, application: Application, revie
             "verified_income_paise": verified_income,
             "evidence_id": evidence.id if evidence else None,
             "income_source": source,
+            "bank_cross_check": bank_status,
             "effective_rate_percent": decision.interest_rate_percent,
             "score_source": customer.score_source,
             "policy_version": decision.policy_version,

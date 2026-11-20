@@ -250,3 +250,15 @@ class BackupMonitor(Base):
     target: Mapped[str] = mapped_column(String(255), primary_key=True)
     checked_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     result: Mapped[dict] = mapped_column(JSON)
+
+class BankCrossCheck(Base):
+    __tablename__ = "bank_cross_checks"
+    application_id: Mapped[str] = mapped_column(ForeignKey("applications.id"), primary_key=True)
+    customer_id: Mapped[str] = mapped_column(ForeignKey("customers.id"), index=True)
+    statement_hash: Mapped[str] = mapped_column(String(64))
+    credits_paise: Mapped[list] = mapped_column(JSON)
+    months: Mapped[list] = mapped_column(JSON)
+    signals: Mapped[list] = mapped_column(JSON, default=list)
+    source: Mapped[str] = mapped_column(String(32), default="customer_mock")
+    consent_version: Mapped[str] = mapped_column(String(32))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)

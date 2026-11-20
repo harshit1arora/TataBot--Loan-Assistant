@@ -12,7 +12,14 @@ from sqlalchemy.orm import Session
 
 from ..config import Settings, get_settings
 from ..db import get_db
-from ..models import Customer, PilotQuote, ReviewRecord, VerifiedIdentity
+from ..models import (
+    Application,
+    BankCrossCheck,
+    Customer,
+    PilotQuote,
+    ReviewRecord,
+    VerifiedIdentity,
+)
 from ..money import compute_emi_paise
 from ..policy import Applicant, build_policy, decide
 from ..security import Principal, require_customer
@@ -220,6 +227,7 @@ def summary(
     explanations = {
         "within_pre_approved_limit": "Within your available limit.",
         "verified_income_document_required": "Verified income is required above your available limit.",
+        "bank_evidence_review_required": "The salary evidence and bank statement require a human review.",
         "emi_within_foir": "The monthly payment fits the verified-income policy.",
         "emi_exceeds_foir_limit": "The monthly payment exceeds the verified-income limit.",
         "credit_score_below_min": "The recorded credit score is below the policy threshold.",
@@ -234,10 +242,17 @@ def summary(
             timeline.append({"at": document.created_at, "event": "Sanction letter issued"})
     reviews = db.scalars(select(ReviewRecord).where(ReviewRecord.application_id == application.id))
     for item in reviews:
-        label = "Replacement salary slip requested" if item.action == "replace" else "Income reviewed"
+        label = (
+            "Replacement salary slip requested" if item.action == "replace" else "Income reviewed"
+        )
         timeline.append({"at": item.created_at, "event": label})
     for decision_item in application.decisions:
-        timeline.append({"at": decision_item.created_at, "event": "Decision: " + decision_item.outcome.replace("_", " ")})
+        timeline.append(
+            {
+                "at": decision_item.created_at,
+                "event": "Decision: " + decision_item.outcome.replace("_", " "),
+            }
+        )
     timeline.sort(key=lambda item: item["at"].isoformat())
     return {
         "timeline": timeline,
@@ -247,6 +262,7 @@ def summary(
         "application": _application_view(db, application),
         "quote": view(quote) if quote else None,
         "income_source": snapshot.get("income_source", "declared"),
+        "bank_cross_check": snapshot.get("bank_cross_check"),
         "verified_income_paise": snapshot.get("verified_income_paise"),
         "score_source": snapshot.get("score_source", "unknown"),
         "identity_source": identity.issuer if identity else "demo",
@@ -268,13 +284,23 @@ def assess(
     if doc.application_id != application.id or doc.doc_type != "salary_slip":
         raise HTTPException(404, "Application evidence missing.")
     if application.status == "document_required":
+        locked = db.scalar(
+            update(Application)
+            .where(Application.id == application.id, Application.status == "document_required")
+            .values(status=Application.status)
+            .returning(Application.id)
+        )
+        if not locked:
+            raise HTTPException(409, "Application is no longer awaiting documents.")
         documents.process_now(db, settings=settings, store=build_store(settings), document=doc)
+        check = db.get(BankCrossCheck, application.id)
+        if check and doc.content_type == "application/pdf":
+            from .bank_statement import pdf_signals
+
+            check.signals = pdf_signals(build_store(settings).read(doc.storage_key))
         if doc.verified_income_paise and not doc.requires_review:
             underwriting.evaluate(db, settings=settings, application=application, reviewed=doc)
     return {
         "application": _application_view(db, application),
         "requires_review": doc.requires_review,
     }
-
-
-

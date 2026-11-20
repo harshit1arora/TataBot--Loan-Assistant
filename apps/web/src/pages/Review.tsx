@@ -9,6 +9,7 @@ type Item = {
   confidence: number | null;
   fields: Record<string, unknown> | null;
   referral: string;
+  bank_check: {status:string; source:string; signals:string[]; independently_verified:boolean; salary_months:string[]; salary_credits_paise:number[]} | null;
   owner: string | null;
   waiting_since: string;
   overdue: boolean;
@@ -115,6 +116,8 @@ export default function Review() {
           }}
         >
           <h2 className="font-semibold">{selected.referral}</h2>
+          {selected.bank_check && <p>Bank statement: {selected.bank_check.status} · {selected.bank_check.source} · independently verified: {String(selected.bank_check.independently_verified)} · signals: {selected.bank_check.signals.join(", ") || "none"}</p>}
+          {selected.bank_check && <p>Credits: {selected.bank_check.salary_months.map((month, index) => month + " ₹" + (selected.bank_check!.salary_credits_paise[index] / 100).toLocaleString("en-IN")).join(" · ")}</p>}
           <button type="button" onClick={() => void staff("/" + selected.document_id + "/claim", {method:"POST"}).then(load).catch((e) => setMessage(e.message))}>Claim review</button>
           <p>
             Extraction confidence ·{" "}
