@@ -108,7 +108,7 @@ jobs:
           for tool in createdb dropdb pg_dump pg_restore; do
             cat > "$RUNNER_TEMP/pg-tools/$tool" <<'SH'
           #!/bin/sh
-          exec docker exec -e PGUSER -e PGPASSWORD -e PGHOST=127.0.0.1 "$PG_CONTAINER" "$(basename "$0")" "$@"
+          exec docker exec --user "$(id -u):$(id -g)" -e PGUSER -e PGPASSWORD -e PGHOST=127.0.0.1 "$PG_CONTAINER" "$(basename "$0")" "$@"
           SH
             chmod +x "$RUNNER_TEMP/pg-tools/$tool"
           done
