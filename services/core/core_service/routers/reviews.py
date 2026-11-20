@@ -17,7 +17,7 @@ from sqlalchemy.orm import Session
 from ..config import Settings, get_settings
 from ..db import get_db
 from ..models import Application, CustomerNotice, Document, ReviewAssignment, ReviewRecord
-from ..services import audit, underwriting
+from ..services import audit, notifications, underwriting
 from ..storage import build_store
 from .applications import _application_view
 from .identity import identity
@@ -155,15 +155,16 @@ def resolve(
         doc.status = "extracted"
         db.flush()
         underwriting.evaluate(db, settings=settings, application=application, reviewed=doc)
-    db.add(
-        CustomerNotice(
-            customer_id=application.customer_id,
-            application_id=application.id,
-            message="A replacement salary slip is required."
-            if body.action == "replace"
-            else f"Your application decision is {application.status.replace(chr(95), chr(32))}.",
-        )
+    notice = CustomerNotice(
+        customer_id=application.customer_id,
+        application_id=application.id,
+        message="A replacement salary slip is required."
+        if body.action == "replace"
+        else f"Your application decision is {application.status.replace(chr(95), chr(32))}.",
     )
+    db.add(notice)
+    db.flush()
+    notifications.schedule_notice(db, notice)
     audit.record(
         db,
         actor_type="underwriter",
@@ -174,5 +175,3 @@ def resolve(
         metadata={"action": body.action, "application_id": application.id},
     )
     return {"application": _application_view(db, application), "action": body.action}
-
-

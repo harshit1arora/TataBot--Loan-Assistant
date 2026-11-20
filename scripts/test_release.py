@@ -29,6 +29,8 @@ def test_staging_manifest_is_single_ingress_with_vertex_and_durable_evidence(mon
     containers = {c["name"]: c for c in spec["containers"]}
     assert set(config()["images"]) == {c["image"] for c in containers.values()}
     assert [name for name, c in containers.items() if c.get("ports")] == ["gateway"]
-    assert all(c.get("startupProbe") for name, c in containers.items() if name != "gateway")
+    assert all(
+        c.get("startupProbe") for name, c in containers.items() if name not in ("gateway", "worker")
+    )
     assert {"name": "GOOGLE_GENAI_USE_VERTEXAI", "value": "true"} in containers["agents"]["env"]
     assert containers["core"]["volumeMounts"][0]["name"] == spec["volumes"][0]["name"]

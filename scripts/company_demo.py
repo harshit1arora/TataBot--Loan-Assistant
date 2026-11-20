@@ -116,6 +116,7 @@ def main() -> None:
         assert post(review_path + "/claim", reviewer)["owner"] == "staff-demo"
         stats = client.get(core + "/v1/operations", headers=reviewer)
         assert stats.status_code == 200 and stats.json()["pending_reviews"] >= 1
+        assert "delivery_counts" in stats.json() and "agent_activity" in stats.json()
         ticket = post(
             "/v1/support/messages",
             customer,

@@ -67,8 +67,10 @@ def test_referral_replacement_then_confirmation(client, auth_headers, monkeypatc
 
     from conftest import make_salary_pdf, token_for
     from core_service.main import app
-    from core_service.models import Document
+    from core_service.models import Delivery, Document
     from core_service.routers.identity import identity
+    from core_service.services.notifications import schedule_escalations
+    from sqlalchemy import select
 
     phone = "9" + str(secrets.randbelow(10**9)).zfill(9)
     created = client.post(
@@ -90,6 +92,8 @@ def test_referral_replacement_then_confirmation(client, auth_headers, monkeypatc
         json={"requested_amount_rupees": 500000, "tenure_months": 36},
     ).json()["application_id"]
     monkeypatch.setenv("OIDC_REVIEWER_SUBJECTS", "reviewer-A")
+    monkeypatch.setenv("ESCALATION_EMAIL", "staff@example.test")
+    monkeypatch.setenv("REVIEW_ESCALATION_SECONDS", "0")
     app.dependency_overrides[identity] = lambda: {"sub": "reviewer-A"}
     try:
         for action in ("replace", "confirm"):
@@ -105,12 +109,31 @@ def test_referral_replacement_then_confirmation(client, auth_headers, monkeypatc
                 doc.status = "extracted"
                 doc.requires_review = True
                 doc.extracted_fields = {"monthly_income_paise": 8500000}
+            with SessionLocal.begin() as db:
+                schedule_escalations(db)
+                schedule_escalations(db)
+                assert (
+                    len(
+                        list(
+                            db.scalars(
+                                select(Delivery).where(Delivery.event_key == "review:" + doc_id)
+                            )
+                        )
+                    )
+                    == 1
+                )
             response = client.post(
                 "/v1/reviews/" + doc_id,
                 json={"action": action, "reason": "Reviewed the original slip"},
             )
             assert response.status_code == 200, response.text
             assert response.json()["application"]["application_id"] == app_id
+            with SessionLocal() as db:
+                assert db.scalar(
+                    select(Delivery).where(
+                        Delivery.category == "customer", Delivery.recipient == "review@example.test"
+                    )
+                )
             summary = client.get("/v1/applications/" + app_id + "/summary", headers=headers).json()
             if action == "replace":
                 assert "replacement" in summary["next_action"]

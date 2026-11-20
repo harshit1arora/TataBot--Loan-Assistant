@@ -24,7 +24,7 @@ def upgrade(engine: Engine) -> None:
             row[0]
             for row in execute("SELECT revision FROM tatabot_core_revision ORDER BY revision")
         ]
-        if existing not in ([], [1], [1, 2], [1, 2, 3]):
+        if existing not in ([], [1], [1, 2], [1, 2, 3], [1, 2, 3, 4]):
             raise RuntimeError(f"Unknown database revisions {existing}")
         if not existing:
             inspector = inspect(connection)
@@ -52,3 +52,8 @@ def upgrade(engine: Engine) -> None:
             for statement in json.loads((DIRECTORY / f"003_{dialect}.json").read_text()):
                 execute(statement)
             execute("INSERT INTO tatabot_core_revision VALUES (3)")
+
+        if 4 not in existing:
+            for statement in json.loads((DIRECTORY / f"004_{dialect}.json").read_text()):
+                execute(statement)
+            execute("INSERT INTO tatabot_core_revision VALUES (4)")

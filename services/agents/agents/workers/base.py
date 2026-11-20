@@ -40,6 +40,10 @@ class Worker:
         try:
             async with model_call(self.llm.name, self.toolbox.settings.llm_timeout_seconds):
                 prose = await self.llm.complete(prompt, system=system)
+        except TimeoutError:
+            if (record := active_worker.get()) is not None:
+                record["fallback"] = "provider_timeout"
+            return fallback
         except BudgetUnavailable:
             if (record := active_worker.get()) is not None:
                 record["fallback"] = "budget_unavailable"

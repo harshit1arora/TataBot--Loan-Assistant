@@ -63,6 +63,7 @@ def run() -> None:
             CORE_BASE_URL=urls["core"],
             CORE_URL=urls["core"],
             CONVERSATION_URL=urls["conversation"],
+            CONVERSATION_BASE_URL=urls["conversation"],
             AGENTS_BASE_URL=urls["agents"],
             AGENTS_URL=urls["agents"],
             MCP_URL=urls["mcp-server"] + "/mcp",
@@ -184,4 +185,3 @@ def run() -> None:
 
 if __name__ == "__main__":
     run()
-

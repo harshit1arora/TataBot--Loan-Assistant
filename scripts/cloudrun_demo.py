@@ -77,6 +77,8 @@ def manifest():
             OIDC_JWKS_URL=os.environ["OIDC_JWKS_URL"],
             STORAGE_DIR="/evidence",
             STORAGE_BACKEND="local",
+            AGENTS_BASE_URL="http://127.0.0.1:8004",
+            CONVERSATION_BASE_URL="http://127.0.0.1:8001",
         )
         + [
             jwt,
@@ -104,6 +106,31 @@ def manifest():
             secret("CORE_CLIENT_SECRET", "core-client"),
         ],
     )
+    worker = {
+        "name": "worker",
+        "image": f"{registry}/core:{release}",
+        "command": ["python", "-m", "core_service.worker"],
+        "env": env(
+            ENV="production",
+            ALLOW_DEMO_AUTH="false",
+            STORAGE_BACKEND="local",
+            STORAGE_DIR="/evidence",
+            SMTP_HOST=os.getenv("SMTP_HOST", ""),
+            SMTP_PORT=os.getenv("SMTP_PORT", "587"),
+            SMTP_FROM=os.getenv("SMTP_FROM", ""),
+            SMTP_USERNAME=os.getenv("SMTP_USERNAME", ""),
+            ESCALATION_EMAIL=os.getenv("ESCALATION_EMAIL", ""),
+        )
+        + [
+            jwt,
+            secret("DATABASE_URL", "core-db"),
+            secret("SERVICE_CLIENT_SECRET", "core-client"),
+            secret("SMTP_PASSWORD", "smtp-password"),
+        ],
+        "resources": {"limits": {"cpu": "1", "memory": "512Mi"}},
+        "volumeMounts": [{"name": "evidence", "mountPath": "/evidence"}],
+    }
+    definitions["worker"] = worker
     add("mock-crm", [crm_token], "mock_crm", 8002)
     add("mock-offermart", env(CRM_BASE_URL=crm) + [crm_token, offers], "mock_offermart", 8003)
     add(
@@ -148,6 +175,8 @@ def manifest():
                 "metadata": {
                     "annotations": {
                         "run.googleapis.com/execution-environment": "gen2",
+                        "run.googleapis.com/cpu-throttling": "false",
+                        "autoscaling.knative.dev/minScale": "1",
                         "autoscaling.knative.dev/maxScale": "2",
                         "run.googleapis.com/container-dependencies": json.dumps(
                             {"gateway": list(ports)}

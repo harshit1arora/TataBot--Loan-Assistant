@@ -126,6 +126,9 @@ class Router:
                 if meta is not None:
                     meta["model"] = self.settings.gemini_model if self.llm.name == "gemini" else self.settings.groq_model
                 return workers, reason, f"llm:{self.llm.name}"
+            except TimeoutError:
+                if meta is not None:
+                    meta["fallback"] = "provider_timeout"
             except BudgetUnavailable:
                 if meta is not None:
                     meta["fallback"] = "budget_unavailable"

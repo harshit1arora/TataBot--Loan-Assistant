@@ -22,6 +22,11 @@ export default function Operations() {
   return <main className="mx-auto max-w-4xl p-6 space-y-4">
     <h1 className="text-3xl font-semibold">Operations</h1><Link to="/identity#review">Sign in as staff</Link>
     <section className="rounded border p-4"><h2 className="font-semibold">Service overview</h2>
+      <p>Agent activity (24 hours): {JSON.stringify(stats.agent_activity ?? {})}</p>
+      <p>Service health: {JSON.stringify(stats.services ?? {})}</p>
+      <p>Overdue reviews: {String(stats.overdue_reviews ?? "—")}</p>
+      <p>Email delivery: {JSON.stringify(stats.delivery_counts ?? {})}</p>
+      <p>Delivery failures: {JSON.stringify(stats.delivery_failures ?? [])}</p>
       <p>Pending reviews: {String(stats.pending_reviews ?? "—")}</p>
       <p>Open support requests: {String(stats.open_support ?? "—")}</p>
       <p>Document failures: {String(stats.document_failures ?? "—")}</p>

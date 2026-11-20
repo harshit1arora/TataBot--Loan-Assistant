@@ -329,5 +329,5 @@ async def test_provider_timeout_keeps_sourced_pricing(graph):
     graph.router.llm = TimedOutRouter()
     result = await _ask(graph, "What is the EMI for 5 lakh over 36 months?")
     assert result["decided_by"] == "rules"
-    assert result["router_detail"]["fallback"] == "model_unavailable_or_invalid"
+    assert result["router_detail"]["fallback"] == "provider_timeout"
     assert result["results"]["interest"]["data"]["quote"]["emi_paise"] == 1_660_715

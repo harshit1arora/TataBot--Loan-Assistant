@@ -17,6 +17,7 @@ from .config import get_settings
 from .db import create_all, session_scope
 from .logging_setup import configure_logging, get_logger
 from .services import documents as document_service
+from .services import notifications
 from .storage import build_store
 
 logger = get_logger("core.worker")
@@ -26,6 +27,10 @@ def run_once() -> int:
     settings = get_settings()
     store = build_store(settings)
     processed = 0
+    with session_scope() as db:
+        notifications.schedule_escalations(db)
+    while notifications.deliver_once():
+        pass
     while True:
         with session_scope() as db:
             document_id = document_service.process_next_job(db, settings=settings, store=store)
