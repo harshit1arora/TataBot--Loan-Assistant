@@ -48,7 +48,7 @@ def manifest():
         if module:
             item.update(
                 command=["uvicorn"],
-                args=[module + ".main:app", "--host", "127.0.0.1", "--port", str(port)],
+                args=[module + ".main:app", "--host", "0.0.0.0", "--port", str(port)],
             )
         definitions[name] = item
         return item
@@ -125,6 +125,20 @@ def manifest():
         )
         + [redis, agents],
     )
+    ports = {
+        "core": 8000,
+        "conversation": 8001,
+        "mock-crm": 8002,
+        "mock-offermart": 8003,
+        "agents": 8004,
+        "mcp-server": 8765,
+    }
+    for name, port in ports.items():
+        definitions[name]["startupProbe"] = {
+            "tcpSocket": {"port": port},
+            "periodSeconds": 3,
+            "failureThreshold": 60,
+        }
     return {
         "apiVersion": "serving.knative.dev/v1",
         "kind": "Service",
@@ -135,6 +149,9 @@ def manifest():
                     "annotations": {
                         "run.googleapis.com/execution-environment": "gen2",
                         "autoscaling.knative.dev/maxScale": "2",
+                        "run.googleapis.com/container-dependencies": json.dumps(
+                            {"gateway": list(ports)}
+                        ),
                     }
                 },
                 "spec": {

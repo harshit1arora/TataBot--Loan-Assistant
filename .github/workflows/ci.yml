@@ -92,12 +92,16 @@ jobs:
 
       - name: Verified enrollment through underwriter approval
         run: |
+          python -m pytest scripts/test_release.py
           npm ci --prefix apps/web
           pip install playwright==1.65.2
           python -m playwright install --with-deps chromium
           python scripts/demo_lab/run.py --browser
       - name: PostgreSQL migrations, reviewed application and restore
         run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y postgresql-client-16
+          export PATH="/usr/lib/postgresql/16/bin:$PATH"
           createdb pilot_core
           createdb pilot_conversation
           python scripts/demo_lab/run.py --postgres

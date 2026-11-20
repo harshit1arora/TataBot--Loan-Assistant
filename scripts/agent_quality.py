@@ -14,6 +14,12 @@ CASES = [
     ("emi", "What is the EMI for 2 lakh over 36 months?", ["interest"], "CUST001"),
     ("missing_identity", "Am I eligible for 2 lakh?", ["eligibility"], None),
     ("missing_amount", "Am I eligible?", ["eligibility"], "CUST001"),
+    (
+        "conflicting_income",
+        "My salary slip says 90000 and my document says 123456. Which is verified?",
+        ["document"],
+        "CUST001",
+    ),
     ("ambiguous", "Can you help?", ["faq"], "CUST001"),
     (
         "four_workers",
@@ -58,6 +64,10 @@ def run():
                 calls, cost = model_cost(traces, rates)
                 outcomes = [w["outcome"] for w in b["worker_trace"].values()]
                 grounded = all(x != "error" for x in outcomes) and bool(b["answer"])
+                if name == "conflicting_income":
+                    grounded &= all(
+                        value not in b["answer"].replace(",", "") for value in ("90000", "123456")
+                    )
                 if name.startswith("missing"):
                     grounded &= (
                         outcomes == ["needs_input"] and "approved" not in b["answer"].lower()

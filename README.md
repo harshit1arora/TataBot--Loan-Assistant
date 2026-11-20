@@ -880,6 +880,8 @@ Set `BROWSER_EXECUTABLE` to use an installed Chromium-compatible browser. Add `-
 3. Render and review the staging revision, then deploy. Register the resulting HTTPS origin plus `/identity` as an OIDC redirect and grant the intended evaluators Cloud Run invocation access. For an IAM-protected deployment, use an authenticated ingress path supporting browser OIDC redirects.
 
 ```sh
+python scripts/cloudbuild_demo.py > staging-build.json
+gcloud builds submit --project "$GOOGLE_CLOUD_PROJECT" --config staging-build.json .
 python scripts/cloudrun_demo.py > staging-service.json
 gcloud run services replace staging-service.json --project "$GOOGLE_CLOUD_PROJECT" --region "$REGION"
 python scripts/browser_demo.py "$STAGING_URL"
@@ -899,11 +901,18 @@ python scripts/postgres_recovery.py backup core_db conversation_db /mnt/evidence
 python scripts/postgres_recovery.py restore recovered_core recovered_conversation /mnt/recovered backups/release-1
 ```
 
-Use matching PostgreSQL client tools. Restore PostgreSQL roles and grants through your infrastructure configuration. For hosted databases, configure the provider's scheduled backups and point-in-time recovery, and version the evidence bucket. The repository drill covers an offline, consistent snapshot. Scheduled cloud backups and regional failover require deployment infrastructure.
+Use matching PostgreSQL client tools. Restore PostgreSQL roles and grants through your infrastructure configuration. For hosted databases, configure the provider's scheduled backups and point-in-time recovery, and version the evidence bucket. For a dedicated Cloud SQL PostgreSQL staging instance, the following provisions daily backups and enables point-in-time recovery. Run during an approved maintenance window and verify the first backup completed in Cloud SQL before relying on it.
 
-**Agent evaluation.** Run `scripts/agent_quality.py` from an environment with access to the private agent service, with `AGENTS_URL`, `AGENT_SERVICE_TOKEN` and optional `BENCH_REPEATS`. The versioned cases exercise ambiguity, missing data, privacy, EMI and four-way routing. The report checks exact worker sets, privacy source selection and the rendered EMI figures against tool data. It reports fallback rate, p95 grouped by worker count, and per-request input/output tokens and estimated model cost. Supply your contractual USD rates per million tokens as JSON in `BENCH_USD_PER_MILLION`, mapping each exact model ID to `[input_rate, output_rate]`. Unpriced or unmetered attempts have null cost. The company demo reports agent cost for its completed application. These figures exclude hosting, storage and model-specific discounts.
+```sh
+gcloud sql instances patch "$SQL_INSTANCE" --project "$GOOGLE_CLOUD_PROJECT" --backup-start-time=02:00 --enable-point-in-time-recovery
+gcloud storage buckets update "gs://$DOCUMENT_BUCKET" --versioning
+```
 
-In a local rules-mode sample of 30 turns, all routed to the expected workers. The one-worker p95 was 141 ms (25 turns), and the four-worker p95 was 391 ms (5 turns). Model cost was zero in that run. These figures describe the synthetic sample, not hosted Gemini latency or pricing.
+The repository drill covers an offline, consistent snapshot. Scheduled cloud backups and regional failover require deployment infrastructure.
+
+**Agent evaluation.** Run `scripts/agent_quality.py` from an environment with access to the private agent service, with `AGENTS_URL`, `AGENT_SERVICE_TOKEN` and optional `BENCH_REPEATS`. The versioned cases exercise conflicting income claims, ambiguity, missing data, privacy, EMI and four-way routing. The report checks exact worker sets, privacy source selection and the rendered EMI figures against tool data. It reports fallback rate, p95 grouped by worker count, and per-request input/output tokens and estimated model cost. Supply your contractual USD rates per million tokens as JSON in `BENCH_USD_PER_MILLION`, mapping each exact model ID to `[input_rate, output_rate]`. Unpriced or unmetered attempts have null cost. The company demo reports agent cost for its completed application. These figures exclude hosting, storage and model-specific discounts.
+
+In a local rules-mode sample of 35 turns, all routed to the expected workers. The one-worker p95 was 125 ms (30 turns), and the four-worker p95 was 266 ms (5 turns). Model cost was zero in that run. These figures describe the synthetic sample, not hosted Gemini latency or pricing.
 
 ## Known limitations
 
