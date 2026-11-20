@@ -56,7 +56,7 @@ def operations(actor: str = Depends(reviewer), db: Session = Depends(get_db)):
         "open_support": db.scalar(
             select(func.count()).select_from(SupportMessage).where(SupportMessage.status == "open")
         ),
-        "applications_by_status": {status: count for status, count in db.execute(select(Application.status, func.count()).group_by(Application.status))},
+        "applications_by_status": {status: count for status, count in db.execute(select(Application.status, func.count()).group_by(Application.status))},  # noqa: C416
         "document_failures": db.scalar(
             select(func.count()).select_from(Document).where(Document.status == "failed")
         ),
@@ -113,5 +113,6 @@ def support_action(
     if body.action == "close":
         row.status = "closed"
     return {"reference": reference, "status": row.status, "owner": actor}
+
 
 
