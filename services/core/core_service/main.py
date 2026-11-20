@@ -5,6 +5,7 @@ and the credit policy in app/policy.py.
 """
 from __future__ import annotations
 
+import os
 import time
 import uuid
 from contextlib import asynccontextmanager
@@ -33,6 +34,7 @@ from .routers import (
     support,
 )
 from .services import customers as customer_service
+from .services import shadow
 
 settings = get_settings()
 configure_logging(settings.log_level, settings.service_name)
@@ -44,6 +46,11 @@ async def lifespan(app: FastAPI):
     create_all()
     with session_scope() as db:
         added = customer_service.seed(db)
+    if os.environ.get("SHADOW_MODEL_ENABLED", "true").lower() == "true":
+        try:
+            shadow._model()
+        except Exception:
+            logger.warning("Shadow model unavailable during startup", exc_info=True)
     logger.info("startup complete", extra={"event": "startup", "customers_seeded": added})
     yield
     logger.info("shutdown", extra={"event": "shutdown"})

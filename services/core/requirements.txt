@@ -14,3 +14,4 @@ httpx==0.28.1
 boto3==1.35.90
 redis==8.1.0
 google-auth[requests]==2.40.3
+xgboost==2.1.4

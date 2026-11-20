@@ -993,3 +993,22 @@ For an application awaiting income evidence, the scenarios page accepts a JSON a
 The mock statement is optional for existing applications. When present, the comparison checks one salary credit per consecutive month, requires a recent final month, and compares every amount with the net pay extracted from the application's salary slip. It records consent, a SHA-256 digest, months and credit amounts, and its customer-submitted mock provenance. A mismatch or a PDF review signal sends the evidence to the underwriter queue. A reviewer cannot confirm a conflicting amount until the statement is corrected or a replacement is requested. The decision snapshot records the comparison and whether it matched.
 
 For PDF payslips, the checker flags an inconsistent gross-minus-deductions calculation when all three figures are available, a PDF modification timestamp preceding its creation timestamp, and unreadable metadata. These are limited review signals. A clean result does not establish that a document is authentic. The synthetic JSON is supplied by the customer, so even a match has `independently_verified: false`. Connecting an authenticated Account Aggregator or bank feed is required before claiming independent verification. The credit policy continues to make the decision, and the mock input cannot override a rejection.
+
+### Research shadow model
+
+Every new underwriting evaluation records a separate XGBoost shadow prediction and TreeSHAP contribution. The deterministic policy remains the sole decision maker. Model failures are recorded as unavailable and a shadow persistence failure is isolated from the policy transaction. Set `SHADOW_MODEL_ENABLED=false` to disable scoring. The staff operations page shows the last 100 shadow records and the number of comparable policy disagreements. A document-required policy outcome is not treated as a comparable decision.
+
+The model has **one feature: age**. It was trained on UCI's [Default of Credit Card Clients dataset](https://archive.ics.uci.edu/dataset/350/default+of+credit+card+clients), 30,000 Taiwanese credit-card clients from 2005, licensed CC BY 4.0. This was chosen because TataBot collects age but does not have equivalent repayment history or comparable currency-denominated credit-card features. The outcome is next-month credit-card default, not personal-loan default. The model's held-out ROC AUC is 0.546 and Brier score is 0.172 on a fixed 25% stratified split. It is a weak research demonstration and must not be used to assess actual applicants. The threshold of 0.22 is an arbitrary comparison threshold, not a lending threshold.
+
+`docs/shadow-model-evaluation.json` records the dataset and model hashes, held-out performance, and group sample counts, flag rates, true-positive rates and false-positive rates by age group and the dataset's recorded sex codes. Sex is used only in the offline audit. TataBot does not collect gender, so the report cannot establish fairness for TataBot applicants or represent all gender identities. In this held-out sample, the model flags 20.1% of ages 30–44 and 88.8% of ages 45 and above at the comparison threshold. The observed false-positive rates are 19.6% and 87.9%, respectively. Group differences are descriptive, without a causal or statistical-significance claim.
+
+The XGBoost `pred_contribs` output provides exact TreeSHAP values in log-odds. Each scored record stores the base log-odds, the age contribution and their sum. The age attribution is a model attribution, not a reason for the policy decision or an actionable recommendation. Records are visible only to authenticated staff. The model does not rescore existing historical decisions automatically.
+
+To reproduce the experiment, obtain the original UCI dataset zip and run:
+
+```sh
+python -m pip install -r scripts/shadow-training-requirements.txt
+python scripts/train_shadow.py path/to/default-of-credit-card-clients.zip
+```
+
+The script uses a fixed seed, verifies TreeSHAP additivity, and writes the model and evaluation report. The UCI data remain subject to their license. Versioned database revision 7 adds the shadow records.

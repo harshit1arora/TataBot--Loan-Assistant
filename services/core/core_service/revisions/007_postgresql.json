@@ -1,0 +1,4 @@
+[
+  "CREATE TABLE IF NOT EXISTS shadow_predictions (\n\tdecision_id VARCHAR(32) NOT NULL, \n\tapplication_id VARCHAR(32) NOT NULL, \n\tstatus VARCHAR(20) NOT NULL, \n\tmodel_sha256 VARCHAR(64), \n\tprobability FLOAT, \n\tbaseline_log_odds FLOAT, \n\tage_shap_log_odds FLOAT, \n\treason_codes JSON NOT NULL, \n\traw_margin FLOAT, \n\tcomparison_threshold FLOAT, \n\tpolicy_outcome VARCHAR(24) NOT NULL, \n\tdisagreement BOOLEAN, \n\terror_type VARCHAR(80), \n\tcreated_at TIMESTAMP WITH TIME ZONE NOT NULL, \n\tPRIMARY KEY (decision_id), \n\tFOREIGN KEY(decision_id) REFERENCES decisions (id), \n\tFOREIGN KEY(application_id) REFERENCES applications (id)\n)",
+  "CREATE INDEX IF NOT EXISTS ix_shadow_predictions_application_id ON shadow_predictions (application_id)"
+]

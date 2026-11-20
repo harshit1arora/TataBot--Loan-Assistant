@@ -148,6 +148,31 @@ def main() -> None:
         }
         final = post(review_path, reviewer, json=resolution)["application"]
         assert final["application_id"] == app_id and final["status"] == "approved", final
+        shadows = client.get(core + "/v1/operations/shadow", headers=reviewer)
+        shadows.raise_for_status()
+        shadow_rows = [row for row in shadows.json() if row["application_id"] == app_id]
+        assert any(
+            row["status"] == "scored" and row["policy_outcome"] == "approve" for row in shadow_rows
+        ), shadow_rows
+        scored = next(
+            row
+            for row in shadow_rows
+            if row["status"] == "scored" and row["policy_outcome"] == "approve"
+        )
+        assert (
+            abs(scored["baseline_log_odds"] + scored["age_shap_log_odds"] - scored["raw_margin"])
+            < 1e-5
+        )
+        print(
+            "Shadow",
+            scored["model_sha256"],
+            "score",
+            scored["probability"],
+            "policy",
+            scored["policy_outcome"],
+            "disagreement",
+            scored["disagreement"],
+        )
         assert client.post(core + review_path, headers=reviewer, json=resolution).status_code == 409
         notices = client.get(core + "/v1/notices", headers=customer).json()
         notice = next(item for item in notices if item["application_id"] == app_id)

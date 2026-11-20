@@ -262,3 +262,20 @@ class BankCrossCheck(Base):
     source: Mapped[str] = mapped_column(String(32), default="customer_mock")
     consent_version: Mapped[str] = mapped_column(String(32))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+class ShadowPrediction(Base):
+    __tablename__ = "shadow_predictions"
+    decision_id: Mapped[str] = mapped_column(ForeignKey("decisions.id"), primary_key=True)
+    application_id: Mapped[str] = mapped_column(ForeignKey("applications.id"), index=True)
+    status: Mapped[str] = mapped_column(String(20))
+    model_sha256: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    probability: Mapped[float | None] = mapped_column(nullable=True)
+    baseline_log_odds: Mapped[float | None] = mapped_column(nullable=True)
+    age_shap_log_odds: Mapped[float | None] = mapped_column(nullable=True)
+    reason_codes: Mapped[list] = mapped_column(JSON, default=list)
+    raw_margin: Mapped[float | None] = mapped_column(nullable=True)
+    comparison_threshold: Mapped[float | None] = mapped_column(nullable=True)
+    policy_outcome: Mapped[str] = mapped_column(String(24))
+    disagreement: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+    error_type: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)

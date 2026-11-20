@@ -7,6 +7,7 @@ and a tenure and nothing else.
 
 from __future__ import annotations
 
+import logging
 from dataclasses import replace
 
 from sqlalchemy import select
@@ -25,7 +26,9 @@ from ..models import (
 )
 from ..money import paise_to_rupees, rupees_to_paise
 from ..policy import Applicant, CreditPolicy, Outcome, Reason, build_policy, decide
-from ..services import audit
+from ..services import audit, shadow
+
+logger = logging.getLogger("core.shadow")
 
 
 def create_application(
@@ -187,6 +190,12 @@ def evaluate(
         Outcome.REQUIRE_DOCUMENT: "document_required",
     }[decision.outcome]
     db.flush()
+    try:
+        with db.begin_nested():
+            shadow.capture(db, application, customer, record)
+            db.flush()
+    except Exception:  # shadow persistence must not change the lending decision
+        logger.exception("Shadow prediction could not be recorded")
 
     audit.record(
         db,

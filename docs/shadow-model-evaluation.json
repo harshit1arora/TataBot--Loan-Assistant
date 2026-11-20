@@ -1,0 +1,66 @@
+{
+  "dataset": "UCI Default of Credit Card Clients",
+  "dataset_url": "https://archive.ics.uci.edu/dataset/350/default+of+credit+card+clients",
+  "dataset_sha256": "56c885f84457f6680f8438f02bfcdac9579323d8a94465ee5f26e32baa727602",
+  "model_sha256": "1987ffed746e51202e420e55d85712f9b5f0ffe47d5a64e4b2190e7e39304807",
+  "population": "Taiwan credit card clients, 2005",
+  "license": "CC BY 4.0",
+  "features": [
+    "age"
+  ],
+  "train_n": 22500,
+  "test_n": 7500,
+  "split_seed": 42,
+  "risk_threshold_for_comparison": 0.22,
+  "positive_label": "next month credit card default",
+  "roc_auc": 0.5462223815581464,
+  "brier_score": 0.1715843061767519,
+  "group_metrics": {
+    "age_21_29": {
+      "n": 2380,
+      "defaults": 539,
+      "non_defaults": 1841,
+      "mean_score": 0.22859711945056915,
+      "flag_rate": 0.40210084033613447,
+      "true_positive_rate": 0.46938775510204084,
+      "false_positive_rate": 0.3824008690928843
+    },
+    "age_30_44": {
+      "n": 3731,
+      "defaults": 776,
+      "non_defaults": 2955,
+      "mean_score": 0.2095637321472168,
+      "flag_rate": 0.20101849370142053,
+      "true_positive_rate": 0.2190721649484536,
+      "false_positive_rate": 0.19627749576988154
+    },
+    "age_45_plus": {
+      "n": 1389,
+      "defaults": 344,
+      "non_defaults": 1045,
+      "mean_score": 0.24461354315280914,
+      "flag_rate": 0.8876889848812095,
+      "true_positive_rate": 0.9127906976744186,
+      "false_positive_rate": 0.8794258373205741
+    },
+    "sex_1": {
+      "n": 2983,
+      "defaults": 702,
+      "non_defaults": 2281,
+      "mean_score": 0.22125403583049774,
+      "flag_rate": 0.3855179349648005,
+      "true_positive_rate": 0.4358974358974359,
+      "false_positive_rate": 0.3700131521262604
+    },
+    "sex_2": {
+      "n": 4517,
+      "defaults": 957,
+      "non_defaults": 3560,
+      "mean_score": 0.2226501703262329,
+      "flag_rate": 0.3962807172902369,
+      "true_positive_rate": 0.4503657262277952,
+      "false_positive_rate": 0.38174157303370787
+    }
+  },
+  "caveats": "Age-only demonstration on foreign historical credit-card data. Not an Indian personal-loan risk estimate. Sex is used for offline group evaluation only. Groups follow dataset codes; gender is not available in TataBot. Policy and model disagree is a simulation, not a validated fairness judgment."
+}

@@ -20,6 +20,7 @@ from ..models import (
     CustomerNotice,
     Delivery,
     Document,
+    ShadowPrediction,
     SupportAssignment,
     SupportMessage,
 )
@@ -28,6 +29,32 @@ from ..services import backup_monitor
 from .reviews import pending, reviewer
 
 router = APIRouter(prefix="/v1")
+
+
+@router.get("/operations/shadow")
+def shadow_predictions(actor: str = Depends(reviewer), db: Session = Depends(get_db)):
+    rows = db.scalars(
+        select(ShadowPrediction).order_by(ShadowPrediction.created_at.desc()).limit(100)
+    )
+    return [
+        {
+            "application_id": row.application_id,
+            "decision_id": row.decision_id,
+            "status": row.status,
+            "policy_outcome": row.policy_outcome,
+            "probability": row.probability,
+            "baseline_log_odds": row.baseline_log_odds,
+            "age_shap_log_odds": row.age_shap_log_odds,
+            "reason_codes": row.reason_codes,
+            "raw_margin": row.raw_margin,
+            "model_sha256": row.model_sha256,
+            "comparison_threshold": row.comparison_threshold,
+            "disagreement": row.disagreement,
+            "error_type": row.error_type,
+            "created_at": row.created_at,
+        }
+        for row in rows
+    ]
 
 
 @router.get("/notices")
@@ -83,7 +110,11 @@ def operations(actor: str = Depends(reviewer), db: Session = Depends(get_db)):
     conversation = os.getenv("CONVERSATION_BASE_URL", "")
     if conversation:
         try:
-            response = httpx.get(conversation.rstrip("/") + "/internal/operations", headers={"X-Monitor-Token": get_settings().service_client_secret}, timeout=3)
+            response = httpx.get(
+                conversation.rstrip("/") + "/internal/operations",
+                headers={"X-Monitor-Token": get_settings().service_client_secret},
+                timeout=3,
+            )
             if response.is_success:
                 activity = response.json()
         except httpx.HTTPError:
