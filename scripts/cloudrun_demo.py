@@ -165,6 +165,14 @@ def manifest():
         "agents": 8004,
         "mcp-server": 8765,
     }
+    if os.getenv("OTEL_EXPORTER_OTLP_TRACES_ENDPOINT"):
+        for name in ("core", "conversation", "agents"):
+            definitions[name]["env"].extend(env(OTEL_EXPORTER_OTLP_TRACES_ENDPOINT=os.environ["OTEL_EXPORTER_OTLP_TRACES_ENDPOINT"]))
+            if os.getenv("OTEL_AUTH_ENABLED", "").lower() == "true":
+                definitions[name]["env"].append(secret("OTEL_EXPORTER_OTLP_HEADERS", "otel-headers"))
+    if os.getenv("LANGFUSE_ENABLED", "").lower() == "true":
+        definitions["agents"]["env"].extend(env(LANGFUSE_BASE_URL=os.environ["LANGFUSE_BASE_URL"]))
+        definitions["agents"]["env"].extend([secret("LANGFUSE_PUBLIC_KEY", "langfuse-public"), secret("LANGFUSE_SECRET_KEY", "langfuse-secret")])
     for name, port in ports.items():
         definitions[name]["startupProbe"] = {
             "tcpSocket": {"port": port},

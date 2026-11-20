@@ -15,6 +15,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
+from . import observability
 from .config import get_settings
 from .db import create_all, session_scope
 from .errors import AppError
@@ -53,6 +54,7 @@ async def lifespan(app: FastAPI):
             logger.warning("Shadow model unavailable during startup", exc_info=True)
     logger.info("startup complete", extra={"event": "startup", "customers_seeded": added})
     yield
+    observability.shutdown()
     logger.info("shutdown", extra={"event": "shutdown"})
 
 
@@ -98,6 +100,8 @@ def _ensure_schema() -> None:
     _schema_ready = True
 
 
+observability.configure("tatabot-core")
+
 @app.middleware("http")
 async def request_context(request: Request, call_next):
     _ensure_schema()
@@ -105,7 +109,7 @@ async def request_context(request: Request, call_next):
     token = request_id_var.set(request_id)
     started = time.perf_counter()
     try:
-        response = await call_next(request)
+        response = await observability.http_span(request, call_next, "core")
     finally:
         request_id_var.reset(token)
     duration_ms = (time.perf_counter() - started) * 1000

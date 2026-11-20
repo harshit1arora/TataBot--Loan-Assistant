@@ -10,6 +10,7 @@ names; LangGraph runs them in the same superstep and merges their writes through
 reducers. Every worker then converges on `synthesise`, so the answer is always assembled in
 one place.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -18,10 +19,12 @@ import time
 from datetime import UTC, datetime
 
 from langgraph.graph import END, StateGraph
+from opentelemetry.trace import StatusCode
 
 from .config import Settings
 from .llm import LLM, RuleBasedLLM
 from .mcp_client import McpToolbox
+from .observability import tracer
 from .router import Router
 from .state import AgentState
 from .telemetry import active_worker, deadline, router_event
@@ -62,9 +65,7 @@ class AgentGraph:
         self.llms = llms or {role: (llm or RuleBasedLLM()) for role in ("router", *WORKER_CLASSES)}
         self.llm = self.llms["router"]
         self.router = Router(self.llm, settings)
-        self.workers = {
-            name: cls(toolbox, self.llms[name]) for name, cls in WORKER_CLASSES.items()
-        }
+        self.workers = {name: cls(toolbox, self.llms[name]) for name, cls in WORKER_CLASSES.items()}
         self.graph = self._build()
 
     def llm_summary(self) -> dict[str, str]:
@@ -79,7 +80,17 @@ class AgentGraph:
         event: dict = {}
         token = router_event.set(event)
         try:
-            workers, reason, decided_by = await self.router.route(state["question"])
+            with tracer.start_as_current_span(
+                "agent.router",
+                attributes={"langfuse.observation.type": "agent"},
+                record_exception=False,
+                set_status_on_exception=False,
+            ) as span:
+                workers, reason, decided_by = await self.router.route(state["question"])
+                span.set_attribute("tatabot.route", workers)
+                span.set_attribute("tatabot.router", decided_by)
+                if event.get("fallback"):
+                    span.set_attribute("tatabot.fallback", event["fallback"])
         finally:
             router_event.reset(token)
         return {
@@ -92,11 +103,31 @@ class AgentGraph:
 
     def _worker_node(self, name: str):
         async def node(state: AgentState) -> dict:
-            record: dict = {"started_at": datetime.now(UTC).isoformat(), "tools": [], "wording": "template"}
+            record: dict = {
+                "started_at": datetime.now(UTC).isoformat(),
+                "tools": [],
+                "wording": "template",
+            }
             token = active_worker.set(record)
             try:
-                output = await asyncio.wait_for(self.workers[name].run(dict(state)),
-                                                max(0.01, deadline.get() - time.monotonic()))
+                with tracer.start_as_current_span(
+                    "agent." + name,
+                    attributes={"langfuse.observation.type": "agent", "tatabot.agent": name},
+                    record_exception=False,
+                    set_status_on_exception=False,
+                ) as span:
+                    try:
+                        output = await asyncio.wait_for(
+                            self.workers[name].run(dict(state)),
+                            max(0.01, deadline.get() - time.monotonic()),
+                        )
+                    except Exception:
+                        span.set_status(StatusCode.ERROR)
+                        span.set_attribute("tatabot.outcome", "error")
+                        raise
+                    span.set_attribute(
+                        "tatabot.outcome", output["results"][name].get("kind", "unknown")
+                    )
                 output["results"][name]["trace"] = record
                 return output
             except Exception as exc:  # noqa: BLE001 - one worker failing must not kill the turn
@@ -151,7 +182,11 @@ class AgentGraph:
                     parts.append(f"{name.capitalize()}: {results[name]['answer']}")
             answer = "\n\n".join(parts)
 
-        return {"answer": answer, "citations": citations, "needs_input": list(dict.fromkeys(needs_input))}
+        return {
+            "answer": answer,
+            "citations": citations,
+            "needs_input": list(dict.fromkeys(needs_input)),
+        }
 
     # -- wiring ------------------------------------------------------------
     def _build(self):
@@ -180,7 +215,13 @@ class AgentGraph:
         initial = new_state(question, customer_id, document_id)
         token = deadline.set(time.monotonic() + self.settings.turn_deadline_seconds)
         try:
-            return await self.graph.ainvoke(initial)
+            with tracer.start_as_current_span(
+                "agent.orchestrate",
+                attributes={"langfuse.observation.type": "chain"},
+                record_exception=False,
+                set_status_on_exception=False,
+            ):
+                return await self.graph.ainvoke(initial)
         finally:
             deadline.reset(token)
 

@@ -4,6 +4,7 @@ The state machine, the amount parser and the reply templates are deterministic. 
 LLM may only add a sentence of warmth, and only when the call budget allows. Every
 decision, every figure and every transition comes from the core service or from code.
 """
+
 from __future__ import annotations
 
 import logging
@@ -11,6 +12,7 @@ import re
 import uuid
 from dataclasses import dataclass, field
 
+from opentelemetry import trace as otel_trace
 from sqlalchemy.orm import Session
 
 from . import replies
@@ -37,6 +39,7 @@ from .models import (
     Transition,
     TurnTrace,
 )
+from .observability import turn_id
 from .workflow import Event, State, TransitionNotAllowed, next_state, preconditions_met
 
 logger = logging.getLogger("conversation.orchestrator")
@@ -107,7 +110,9 @@ class Orchestrator:
         db.flush()
         return session
 
-    def _add_message(self, db: Session, session: ConversationSession, role: str, content: str) -> None:
+    def _add_message(
+        self, db: Session, session: ConversationSession, role: str, content: str
+    ) -> None:
         db.add(Message(session_id=session.id, role=role, content=content))
 
     def _advance(self, db: Session, session: ConversationSession, event: Event) -> None:
@@ -116,7 +121,8 @@ class Orchestrator:
             target = next_state(current, event)
         except TransitionNotAllowed:
             logger.warning(
-                "transition refused", extra={"session_id": session.id, "state": current.value, "event": event.value}
+                "transition refused",
+                extra={"session_id": session.id, "state": current.value, "event": event.value},
             )
             raise
         if target is not current:
@@ -159,14 +165,26 @@ class Orchestrator:
 
     # --- main entry ------------------------------------------------------
     async def handle_message(self, db: Session, **kwargs) -> TurnResult:
-        result = await self._handle_message(db, **kwargs)
-        trace = TurnTrace(session_id=result.session_id, detail={
-            'intent': result.intent or 'workflow', 'state': result.state.value,
-            'route': result.agent_route, **result.execution,
-        })
+        current_id = uuid.uuid4().hex
+        token = turn_id.set(current_id)
+        try:
+            result = await self._handle_message(db, **kwargs)
+        finally:
+            turn_id.reset(token)
+        trace = TurnTrace(
+            id=current_id,
+            session_id=result.session_id,
+            detail={
+                "intent": result.intent or "workflow",
+                "state": result.state.value,
+                "route": result.agent_route,
+                **result.execution,
+            },
+        )
         db.add(trace)
         db.flush()
         result.trace_id = trace.id
+        otel_trace.get_current_span().set_attribute("tatabot.turn_id", trace.id)
         return result
 
     async def _handle_message(
@@ -194,16 +212,26 @@ class Orchestrator:
             db.flush()
             # A numeric reply completes the quote. An explicit application request
             # continues through the normal workflow below.
-            if (self.agents and self.settings.agents_enabled and parse_amount(message)
-                    and re.match(r"^(?:₹|rs\.?\s*|inr\s*)?\d", message, re.I)):
-                return await self._on_question(db, session, customer_id, f"{pending.question} {message}")
+            if (
+                self.agents
+                and self.settings.agents_enabled
+                and parse_amount(message)
+                and re.match(r"^(?:₹|rs\.?\s*|inr\s*)?\d", message, re.I)
+            ):
+                return await self._on_question(
+                    db, session, customer_id, f"{pending.question} {message}"
+                )
 
         if looks_like_support_request(message):
             return self._on_support(db, session)
 
         # A question goes to the agent graph: it can explain eligibility, price a loan or
         # answer a policy question without touching the application workflow.
-        if self.agents is not None and self.settings.agents_enabled and looks_like_question(message):
+        if (
+            self.agents is not None
+            and self.settings.agents_enabled
+            and looks_like_question(message)
+        ):
             return await self._on_question(db, session, customer_id, message)
 
         if state is State.NEW:
@@ -248,9 +276,7 @@ class Orchestrator:
             suggested_actions=["I need 2 lakh for 36 months", "What is my pre-approved limit?"],
         )
 
-    async def _on_question(
-        self, db, session, customer_id: str, message: str
-    ) -> TurnResult:
+    async def _on_question(self, db, session, customer_id: str, message: str) -> TurnResult:
         """Delegate to the LangGraph orchestrator. Never changes the workflow state."""
         assert self.agents is not None
         self._advance(db, session, Event.SMALLTALK)
@@ -275,11 +301,15 @@ class Orchestrator:
         interest = result.get("data", {}).get("interest", {})
         if interest.get("request") and interest.get("quote"):
             try:
-                quote = await self.core.issue_quote(customer_id, interest["request"], interest["quote"])
+                quote = await self.core.issue_quote(
+                    customer_id, interest["request"], interest["quote"]
+                )
                 quote_id = quote["quote_id"]
                 reply += "\n\nYour saved quote is available in Compare loans. Review any change in terms before applying."
             except CoreServiceError:
-                reply += "\n\nThe application quote is unavailable; the product estimate is indicative."
+                reply += (
+                    "\n\nThe application quote is unavailable; the product estimate is indicative."
+                )
         if "amount" in (result.get("needs_input") or []):
             db.add(PendingAgentQuestion(session_id=session.id, question=message))
         # The worker already asks for anything it is missing (amount, tenure), so do not
@@ -293,7 +323,11 @@ class Orchestrator:
             intent="agents",
             agent_route=route,
             quote_id=quote_id,
-            execution={"router_detail": result.get("router_detail", {}), "router": result.get("decided_by", "unknown"), "workers": result.get("worker_trace", {})},
+            execution={
+                "router_detail": result.get("router_detail", {}),
+                "router": result.get("decided_by", "unknown"),
+                "workers": result.get("worker_trace", {}),
+            },
             citations=result.get("citations") or [],
         )
 
@@ -415,8 +449,10 @@ class Orchestrator:
                 self._advance(db, session, Event.DOCUMENT_RECEIVED)
                 return await self._apply_outcome(db, session, customer_token, application)
         parsed = parse_amount(message)
-        if parsed and (parsed.rupees * 100 != session.requested_amount_paise
-                       or (parse_tenure(message) or DEFAULT_TENURE_MONTHS) != session.tenure_months):
+        if parsed and (
+            parsed.rupees * 100 != session.requested_amount_paise
+            or (parse_tenure(message) or DEFAULT_TENURE_MONTHS) != session.tenure_months
+        ):
             db.merge(ApplicationAttempt(session_id=session.id, attempt_id=session.application_id))
             # A new request supersedes the pending one.
             self._advance(db, session, Event.AMOUNT_PROVIDED)
@@ -436,12 +472,12 @@ class Orchestrator:
         if State(session.state) is State.SANCTIONED:
             reply = (
                 "Your loan is sanctioned and the letter is available in this conversation. "
-                "Say \"new application\" if you'd like to apply again."
+                'Say "new application" if you\'d like to apply again.'
             )
         elif State(session.state) is State.REJECTED:
             reply = (
                 "That application was declined. You can apply for a lower amount, or say "
-                "\"new application\" to try again."
+                '"new application" to try again.'
             )
         else:
             reply = replies.smalltalk(session.state)
@@ -481,7 +517,9 @@ class Orchestrator:
 
         self._add_message(db, session, "customer", f"[document uploaded: {doc_type}]")
         reply = replies.document_received(
-            document["status"], document.get("requires_review", False), document.get("verified_income_paise")
+            document["status"],
+            document.get("requires_review", False),
+            document.get("verified_income_paise"),
         )
 
         if document.get("requires_review") or not document.get("verified_income_paise"):

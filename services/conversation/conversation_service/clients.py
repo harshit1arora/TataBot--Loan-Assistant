@@ -12,6 +12,7 @@ import time
 from dataclasses import dataclass, field
 
 import httpx
+from opentelemetry import propagate
 
 from .config import Settings
 
@@ -90,6 +91,7 @@ class CoreClient:
         if idempotency_key:
             headers["Idempotency-Key"] = idempotency_key
 
+        propagate.inject(headers)
         last_error: Exception | None = None
         for attempt in range(self.settings.core_max_retries + 1):
             try:

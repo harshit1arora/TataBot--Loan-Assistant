@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import os
+from pathlib import Path
 from io import BytesIO
 
 import httpx
@@ -55,6 +56,8 @@ def main() -> None:
         )
         turn.raise_for_status()
         body = turn.json()
+        if os.getenv("PILOT_TRACE_FILE"):
+            Path(os.environ["PILOT_TRACE_FILE"]).write_text(body["trace_id"], encoding="utf-8")
         assert set(body["agent_route"]) == {"eligibility", "interest", "document", "faq"}, body
         trace = client.get(
             conversation + "/sessions/" + body["session_id"] + "/trace", headers=customer

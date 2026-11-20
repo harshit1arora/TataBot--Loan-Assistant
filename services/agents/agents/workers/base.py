@@ -1,12 +1,16 @@
 """Shared worker plumbing: call tools, then phrase the result safely."""
+
 from __future__ import annotations
 
 import json
 import logging
 
+from opentelemetry.trace import StatusCode
+
 from ..budget import BudgetUnavailable, model_call
 from ..llm import LLM, LlmUnavailable, prose_is_grounded
 from ..mcp_client import McpToolbox, ToolFailure
+from ..observability import tracer
 from ..telemetry import active_worker
 
 logger = logging.getLogger("agents.worker")
@@ -68,7 +72,19 @@ class Worker:
     async def safe_call(self, tool: str, **arguments) -> tuple[dict | None, str | None]:
         """Returns (data, error_message). Workers degrade instead of raising."""
         try:
-            data = await self.toolbox.call(tool, **arguments)
+            with tracer.start_as_current_span(
+                "tool." + tool,
+                attributes={"langfuse.observation.type": "tool", "gen_ai.tool.name": tool},
+                record_exception=False,
+                set_status_on_exception=False,
+            ) as span:
+                try:
+                    data = await self.toolbox.call(tool, **arguments)
+                    span.set_attribute("tatabot.tool.status", "ok")
+                except ToolFailure:
+                    span.set_attribute("tatabot.tool.status", "failed")
+                    span.set_status(StatusCode.ERROR)
+                    raise
             if (record := active_worker.get()) is not None:
                 record["tools"].append({"name": tool, "status": "ok"})
             return data, None

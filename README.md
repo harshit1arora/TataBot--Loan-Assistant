@@ -934,7 +934,7 @@ Stated plainly, because a README that hides them is worse than one that is short
 6. **Schema upgrades.** Core and conversation maintain versioned SQLite and PostgreSQL migrations.
 7. **No retention job.** Sessions and audit rows grow without bound; a purge policy is
    outstanding work for DPDP erasure.
-8. **Trace export.** The conversation service persists turn, worker and tool traces. OpenTelemetry export remains open.
+8. **Trace export.** The conversation service persists turn, worker and tool traces. Optional OTLP and Langfuse-compatible exports send content-free telemetry.
 9. **Browser coverage.** Chromium exercises verified enrollment, parallel chat, quote acceptance, reviewer resolution and PDF download. The lab uses an isolated test issuer. Hosted sign-in requires configured provider accounts.
 
 See [`docs/PRODUCTION-READINESS.md`](docs/PRODUCTION-READINESS.md) for the full fix-by-fix record
@@ -1020,3 +1020,13 @@ A declined application's summary can show three illustrative alternatives, evalu
 These checks use the customer's current age, credit score and pre-approved limit. They use income from the recorded evidence only while that document remains verified and unchanged. The original decline remains in the timeline. If current policy or facts produce a different outcome, the page reports that difference rather than presenting old terms as current. Age, credit-score and other policy failures are not bypassed. When a mock bank statement is attached, the higher-income suggestion is suppressed because a changed income would also require matching new bank evidence.
 
 The figures are comparisons, and a new application must be quoted and assessed again. A higher income must reflect actual, verifiable evidence. Historical applications without a linked valid income document are evaluated without verified income. The browser demo exercises both the underwriter approval journey and a separate affordability decline with all three alternatives.
+
+### OpenTelemetry and Langfuse
+
+Telemetry is opt-in. Set `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` to the full OTLP/HTTP protobuf traces URL on core, conversation and agents. The standard `OTEL_EXPORTER_OTLP_HEADERS` setting can supply collector authentication. Configure the agent service with `LANGFUSE_BASE_URL`, `LANGFUSE_PUBLIC_KEY` and `LANGFUSE_SECRET_KEY` to also export its spans to Langfuse's OTLP traces endpoint. The two exporters can run together. Use secrets for credentials and use TLS for remote endpoints.
+
+The Cloud Run renderer forwards the OTLP endpoint when set. Set `OTEL_AUTH_ENABLED=true` to use the `tatabot-otel-headers` secret. Set `LANGFUSE_ENABLED=true` and `LANGFUSE_BASE_URL` before rendering, and provision `tatabot-langfuse-public` and `tatabot-langfuse-secret` in Secret Manager. Both settings default off.
+
+Spans include service, routing, worker and tool names, outcomes, timing, model name, and available token counts. Conversation spans carry the persisted turn ID and propagate W3C context to the agent and core services. Langfuse receives the agent's router, parallel worker, tool and model spans. The implementation deliberately does not export user questions, model prompts or answers, customer identifiers, request headers, document text, or exception messages. Model output and prompts cannot be inspected in Langfuse with this configuration. MCP invocations are traced from the agent; the MCP server is not independently instrumented.
+
+Verify locally with `python scripts/demo_lab/run.py --browser --tracing`. The lab uses local OTLP and Langfuse-compatible receivers, verifies the same turn ID and parent-child links across the three services, checks all four agent spans, and checks that synthetic sensitive content is absent. Run `python scripts/demo_lab/run.py --langfuse-only` to verify correlation when only Langfuse is configured. A live Langfuse instance and live model require separately configured credentials. Batch export is asynchronous and best effort. Monitor exporter errors and your collector independently, and use an operational collector for metrics and logs.

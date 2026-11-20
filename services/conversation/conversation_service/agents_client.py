@@ -11,8 +11,10 @@ import logging
 import time
 
 import httpx
+from opentelemetry import propagate
 
 from .config import Settings
+from .observability import turn_id
 
 logger = logging.getLogger("conversation.agents")
 
@@ -52,6 +54,10 @@ class AgentsClient:
         if document_id:
             payload["document_id"] = document_id
 
+        headers = {"x-service-token": self.settings.agents_service_token}
+        if current_turn := turn_id.get():
+            headers["x-tatabot-turn-id"] = current_turn
+        propagate.inject(headers)
         for attempt in range(2):
             try:
                 async with httpx.AsyncClient(
@@ -62,7 +68,7 @@ class AgentsClient:
                     response = await client.post(
                         "/agent/query",
                         json=payload,
-                        headers={"x-service-token": self.settings.agents_service_token},
+                        headers=headers,
                     )
                 if response.status_code >= 500:
                     raise AgentsUnavailable(f"agents returned {response.status_code}")

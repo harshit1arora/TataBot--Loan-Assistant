@@ -11,6 +11,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm.exc import StaleDataError
 
+from . import observability
 from .agents_client import AgentsClient
 from .clients import CoreClient
 from .config import get_settings
@@ -43,6 +44,7 @@ def initialize(app: FastAPI) -> None:
 async def lifespan(app: FastAPI):
     initialize(app)
     yield
+    observability.shutdown()
     del app.state.orchestrator
     logger.info("shutdown", extra={"event": "shutdown"})
 
@@ -69,6 +71,8 @@ app.add_middleware(
 )
 
 
+observability.configure("tatabot-conversation")
+
 @app.middleware("http")
 async def request_context(request: Request, call_next):
     request_id = request.headers.get("x-request-id") or uuid.uuid4().hex[:16]
@@ -76,7 +80,7 @@ async def request_context(request: Request, call_next):
     started = time.perf_counter()
     try:
         initialize(request.app)
-        response = await call_next(request)
+        response = await observability.http_span(request, call_next, "conversation")
     finally:
         request_id_var.reset(token)
     response.headers["x-request-id"] = request_id

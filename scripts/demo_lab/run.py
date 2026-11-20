@@ -15,6 +15,7 @@ from pathlib import Path
 import httpx
 
 from issuer import fixture
+import telemetry_collector
 
 ROOT = Path(__file__).resolve().parents[2]
 UNITS = {
@@ -84,6 +85,13 @@ def run() -> None:
             )
             if not env.get("GOOGLE_CLOUD_PROJECT"):
                 raise ValueError("Set GOOGLE_CLOUD_PROJECT for the live Vertex run")
+        telemetry = None
+        langfuse_only = "--langfuse-only" in sys.argv
+        if "--tracing" in sys.argv or langfuse_only:
+            telemetry = telemetry_collector.fixture(env, langfuse_only=langfuse_only)
+            env["PILOT_TRACE_FILE"] = str(Path(directory) / "trace-id.txt")
+            cleanup.callback(telemetry.server_close)
+            cleanup.callback(telemetry.shutdown)
         issuer = fixture(directory, env)
         cleanup.callback(issuer.server_close)
         cleanup.callback(issuer.shutdown)
@@ -165,6 +173,10 @@ def run() -> None:
                 [sys.executable, str(ROOT / "scripts" / "browser_demo.py"), url, "--local"],
                 env=env,
                 check=True,
+            )
+        if telemetry:
+            telemetry_collector.verify(
+                telemetry, Path(env["PILOT_TRACE_FILE"]).read_text(), langfuse_only=langfuse_only
             )
         for process in processes:
             stop(process)

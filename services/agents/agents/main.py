@@ -16,6 +16,7 @@ from typing import Annotated, Literal
 from fastapi import Depends, FastAPI, Header, Request, Response
 from fastapi.responses import JSONResponse
 
+from . import observability
 from .config import ROLES, key_report, settings, validate_role_keys
 from .graph import AgentGraph
 from .llm import build_llm
@@ -43,6 +44,7 @@ async def lifespan(app: FastAPI):
     app.state.llm_name = next((client.name for client in llms.values() if client.available), "rules")
     app.state.llm_keys = key_report(settings)
     yield
+    observability.shutdown()
 
 
 app = FastAPI(
@@ -152,11 +154,13 @@ async def query(
     )
 
 
+observability.configure("tatabot-agents", langfuse=True)
+
 @app.middleware("http")
 async def request_context(request: Request, call_next):
     request_id = request.headers.get("x-request-id") or uuid.uuid4().hex[:16]
     started = time.perf_counter()
-    response = await call_next(request)
+    response = await observability.http_span(request, call_next, "agents")
     response.headers["x-request-id"] = request_id
     response.headers["x-agent-duration-ms"] = str(round((time.perf_counter() - started) * 1000, 1))
     return response
