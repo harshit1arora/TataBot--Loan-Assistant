@@ -58,7 +58,7 @@ def run() -> None:
             MOCK_CRM_TOKEN=secret,
             MOCK_OFFERMART_TOKEN=secret,
             STORAGE_BACKEND="local",
-            STORAGE_DIR=directory,
+            STORAGE_DIR=str(Path(directory) / "storage"),
             CORE_BASE_URL=urls["core"],
             CORE_URL=urls["core"],
             CONVERSATION_URL=urls["conversation"],
@@ -76,6 +76,12 @@ def run() -> None:
             MAX_WORKERS_PER_TURN="4",
             REDIS_URL=os.getenv("TEST_REDIS_URL", ""),
         )
+        if "--vertex" in sys.argv:
+            env.update(
+                LLM_PROVIDER="gemini", GOOGLE_GENAI_USE_VERTEXAI="true", REQUIRE_LIVE_GEMINI="1"
+            )
+            if not env.get("GOOGLE_CLOUD_PROJECT"):
+                raise ValueError("Set GOOGLE_CLOUD_PROJECT for the live Vertex run")
         issuer = fixture(directory, env)
         cleanup.callback(issuer.server_close)
         cleanup.callback(issuer.shutdown)
@@ -91,7 +97,14 @@ def run() -> None:
             process = subprocess.Popen(
                 [sys.executable, "-m", *args],
                 cwd=ROOT / "services" / name,
-                env=dict(env, DATABASE_URL=f"sqlite:///{directory}/{name}.db"),
+                env=dict(
+                    env,
+                    DATABASE_URL=(
+                        f"postgresql+psycopg:///pilot_{name}"
+                        if "--postgres" in sys.argv and name in ("core", "conversation")
+                        else f"sqlite:///{directory}/{name}.db"
+                    ),
+                ),
                 stdout=log,
                 stderr=subprocess.STDOUT,
             )
@@ -110,8 +123,57 @@ def run() -> None:
                 time.sleep(1)
             else:
                 raise TimeoutError("Demo services did not become ready.")
-        for script in ("company_demo.py", "smoke_test.py"):
+        for script in ("company_demo.py", "agent_quality.py", "smoke_test.py"):
             subprocess.run([sys.executable, str(ROOT / "scripts" / script)], env=env, check=True)
+
+        if "--browser" in sys.argv:
+            with socket.socket() as sock:
+                sock.bind(("127.0.0.1", 0))
+                port = sock.getsockname()[1]
+            web = subprocess.Popen(
+                [
+                    "node",
+                    "node_modules/vite/bin/vite.js",
+                    "--host",
+                    "127.0.0.1",
+                    "--strictPort",
+                    "--port",
+                    str(port),
+                ],
+                cwd=ROOT / "apps" / "web",
+                env=dict(
+                    env, VITE_CORE_URL=urls["core"], VITE_CONVERSATION_URL=urls["conversation"]
+                ),
+            )
+            cleanup.callback(stop, web)
+            url = f"http://127.0.0.1:{port}"
+            for _ in range(60):
+                try:
+                    if httpx.get(url).is_success:
+                        break
+                except httpx.HTTPError:
+                    pass
+                time.sleep(0.5)
+            subprocess.run(
+                [sys.executable, str(ROOT / "scripts" / "browser_demo.py"), url, "--local"],
+                env=env,
+                check=True,
+            )
+        for process in processes:
+            stop(process)
+        subprocess.run(
+            [
+                sys.executable,
+                str(
+                    ROOT
+                    / "scripts"
+                    / ("postgres_drill.py" if "--postgres" in sys.argv else "recovery_drill.py")
+                ),
+                directory,
+            ],
+            env=env,
+            check=True,
+        )
 
 
 if __name__ == "__main__":

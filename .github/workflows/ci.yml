@@ -56,10 +56,18 @@ jobs:
     name: crm · offermart · mcp · agents
     runs-on: ubuntu-latest
     services:
+      postgres:
+        image: postgres:16-alpine
+        ports: ["5432:5432"]
+        env:
+          POSTGRES_PASSWORD: pilot_ci_only
       redis:
         image: redis:7-alpine
         ports: ["6379:6379"]
     env:
+      PGHOST: localhost
+      PGUSER: postgres
+      PGPASSWORD: pilot_ci_only
       TEST_REDIS_URL: redis://localhost:6379/15
     steps:
       - uses: actions/checkout@v4
@@ -83,7 +91,16 @@ jobs:
         run: cd services/agents && python -m pytest
 
       - name: Verified enrollment through underwriter approval
-        run: python scripts/demo_lab/run.py
+        run: |
+          npm ci --prefix apps/web
+          pip install playwright==1.65.2
+          python -m playwright install --with-deps chromium
+          python scripts/demo_lab/run.py --browser
+      - name: PostgreSQL migrations, reviewed application and restore
+        run: |
+          createdb pilot_core
+          createdb pilot_conversation
+          python scripts/demo_lab/run.py --postgres
 
   frontend:
     name: frontend

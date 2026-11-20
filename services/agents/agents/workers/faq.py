@@ -1,6 +1,8 @@
 """FAQ worker — answers from the policy knowledge base, with the source attached."""
 from __future__ import annotations
 
+import re
+
 from .base import Worker
 
 
@@ -10,6 +12,12 @@ class FaqWorker(Worker):
 
     async def run(self, state: dict) -> dict:
         question = state["question"]
+        # Isolate the FAQ clause when other specialists handle a compound question.
+        clauses = re.split(r"[,;?]|\band\b", question, flags=re.IGNORECASE)
+        for clause in clauses:
+            if re.search(r"\b(privacy|grievance|complaint|prepay|foreclos\w*)\b", clause, re.I):
+                question = clause
+                break
         result, error = await self.safe_call("search_faq", query=question, limit=2)
 
         if error or not result:

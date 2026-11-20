@@ -111,9 +111,9 @@ ENTRIES: list[dict] = [
         "question": "What happens to my data?",
         "keywords": ["data", "privacy", "stored", "store", "share", "secure", "security", "dpdp"],
         "answer": (
-            "Your records live in this deployment's database and object storage. Your credit score, "
-            "limit and contact details are never sent to the language model — only a first name and a "
-            "coarse band — and audit rows are stored with identifiers redacted."
+            "Your records live in this deployment's database and object storage. When a live language model is enabled, the router receives "
+            "your question. Keep account numbers, contact details and sensitive documents out of chat. "
+            "Use the document upload flow for income evidence."
         ),
         "source": "services/conversation/conversation_service/llm.py + services/core audit redaction",
     },

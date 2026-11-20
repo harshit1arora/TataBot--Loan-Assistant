@@ -70,6 +70,6 @@ def session_scope() -> Iterator[Session]:
 
 
 def create_all() -> None:
-    from . import models  # noqa: F401  (register mappers)
+    from .schema import upgrade
 
-    Base.metadata.create_all(bind=engine)
+    upgrade(engine)

@@ -15,10 +15,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from .config import get_settings
-from .db import create_all, engine, session_scope
+from .db import create_all, session_scope
 from .errors import AppError
 from .logging_setup import configure_logging, get_logger, request_id_var
-from .migrations import apply_additive_migrations
 from .routers import (
     applications,
     auth,
@@ -41,7 +40,6 @@ logger = get_logger("core.app")
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     create_all()
-    apply_additive_migrations(engine)
     with session_scope() as db:
         added = customer_service.seed(db)
     logger.info("startup complete", extra={"event": "startup", "customers_seeded": added})
@@ -86,11 +84,8 @@ def _ensure_schema() -> None:
     if _schema_ready:
         return
     create_all()
-    applied = apply_additive_migrations(engine)
     with session_scope() as db:
         customer_service.seed(db)
-    if applied:
-        logger.info("schema patched", extra={"event": "migration", "columns": applied})
     _schema_ready = True
 
 

@@ -860,6 +860,51 @@ before they reach a commit.
 Two repository settings worth turning on: **branch protection** on `main` (require the CI
 checks) and **Dependabot** for the three dependency manifests.
 
+## Staging, browser acceptance and recovery
+
+The repeatable lab starts the six HTTP services with synthetic identities, drives an application through review, submits a second question through the React UI in Chromium, then stops the writers and restores into a fresh directory. Install the pilot dependencies above, and run:
+
+```sh
+npm ci --prefix apps/web
+python -m pip install playwright==1.65.2
+python -m playwright install chromium
+python scripts/demo_lab/run.py --browser
+```
+
+Set `BROWSER_EXECUTABLE` to use an installed Chromium-compatible browser. Add `--vertex` with Vertex application-default credentials, a billed `GOOGLE_CLOUD_PROJECT`, a supported `GEMINI_MODEL` and `GOOGLE_CLOUD_LOCATION` for a live run. The application check fails if the model falls back to rules.
+
+**Cloud Run staging.** The single public gateway serves the SPA and authenticated application routes. The six backend containers communicate over loopback. The service definition uses external PostgreSQL, Redis and a persistent Cloud Storage volume for documents. The CRM and offer catalogue remain synthetic. To prepare a staging release:
+
+1. Build and publish seven Linux images with the same release tag under `IMAGE_REGISTRY`. Use each service Dockerfile for `core`, `conversation`, `agents`, `mcp-server`, `mock-crm`, and `mock-offermart`. Build `gateway` from `apps/web` with build arguments `VITE_OIDC_ISSUER` and `VITE_OIDC_CLIENT_ID` matching the configured issuer and audience.
+2. Set `IMAGE_REGISTRY`, `RELEASE`, `GOOGLE_CLOUD_PROJECT`, `RUNTIME_SERVICE_ACCOUNT`, `DOCUMENT_BUCKET`, `OIDC_ISSUER`, `OIDC_AUDIENCE`, `OIDC_JWKS_URL` and `GEMINI_MODEL`. Give the runtime identity access to Vertex predictions, the evidence bucket and the configured secrets. Create Secret Manager entries prefixed with `tatabot-` for `jwt`, `redis-url`, `core-db`, `conversation-db`, `core-client`, `agent-token`, `crm-token`, `offer-token` and `reviewers`. Use SQLAlchemy PostgreSQL URLs with the psycopg driver. Configure network access to both databases and Redis, including VPC egress when using private addresses.
+3. Render and review the staging revision, then deploy. Register the resulting HTTPS origin plus `/identity` as an OIDC redirect and grant the intended evaluators Cloud Run invocation access. For an IAM-protected deployment, use an authenticated ingress path supporting browser OIDC redirects.
+
+```sh
+python scripts/cloudrun_demo.py > staging-service.json
+gcloud run services replace staging-service.json --project "$GOOGLE_CLOUD_PROJECT" --region "$REGION"
+python scripts/browser_demo.py "$STAGING_URL"
+```
+
+The hosted browser check opens a visible browser for synthetic applicant sign-in, sends the four-part question, checks the displayed answer and verifies a persisted Gemini router trace. The separate company demo above verifies enrollment, reviewer authorization, the final decision and PDF. Set `REQUIRE_LIVE_GEMINI=1` to require live routing there too.
+
+**Schema and recovery.** Core and conversation apply immutable SQL revisions on startup under a transaction lock. Revision 1 adopts the existing schema and revision 2 adds the review queue and session trace indexes. Unknown revisions stop startup. Stop all application writers, including background workers, before backing up both databases and evidence together. Keep archives encrypted in restricted storage. Each restore requires a fresh destination and validates document hashes.
+
+```sh
+# SQLite pilot layout: core.db, conversation.db and storage/ under pilot-data
+python scripts/recovery.py backup pilot-data backups/release-1
+python scripts/recovery.py restore backups/release-1 recovered-pilot
+
+# PostgreSQL with libpq PGHOST, PGUSER and credentials, mounted evidence, pg_dump/pg_restore
+python scripts/postgres_recovery.py backup core_db conversation_db /mnt/evidence backups/release-1
+python scripts/postgres_recovery.py restore recovered_core recovered_conversation /mnt/recovered backups/release-1
+```
+
+Use matching PostgreSQL client tools. Restore PostgreSQL roles and grants through your infrastructure configuration. For hosted databases, configure the provider's scheduled backups and point-in-time recovery, and version the evidence bucket. The repository drill covers an offline, consistent snapshot. Scheduled cloud backups and regional failover require deployment infrastructure.
+
+**Agent evaluation.** Run `scripts/agent_quality.py` from an environment with access to the private agent service, with `AGENTS_URL`, `AGENT_SERVICE_TOKEN` and optional `BENCH_REPEATS`. The versioned cases exercise ambiguity, missing data, privacy, EMI and four-way routing. The report checks exact worker sets, privacy source selection and the rendered EMI figures against tool data. It reports fallback rate, p95 grouped by worker count, and per-request input/output tokens and estimated model cost. Supply your contractual USD rates per million tokens as JSON in `BENCH_USD_PER_MILLION`, mapping each exact model ID to `[input_rate, output_rate]`. Unpriced or unmetered attempts have null cost. The company demo reports agent cost for its completed application. These figures exclude hosting, storage and model-specific discounts.
+
+In a local rules-mode sample of 30 turns, all routed to the expected workers. The one-worker p95 was 141 ms (25 turns), and the four-worker p95 was 391 ms (5 turns). Model cost was zero in that run. These figures describe the synthetic sample, not hosted Gemini latency or pricing.
+
 ## Known limitations
 
 Stated plainly, because a README that hides them is worse than one that is short.
@@ -875,13 +920,11 @@ Stated plainly, because a README that hides them is worse than one that is short
 4. **No bureau, no disbursal, no notifications.** Support messages are stored but not routed to
    any queue or inbox. The sanction letter is a simulation and says so.
 5. **Fleet limits require Redis.** Configure the shared Redis endpoint for replicated services.
-6. **No migration history.** Schema comes from the models; add Alembic before the first change
-   that must be applied to live data.
+6. **Schema upgrades.** Core and conversation maintain versioned SQLite and PostgreSQL migrations.
 7. **No retention job.** Sessions and audit rows grow without bound; a purge policy is
    outstanding work for DPDP erasure.
 8. **Trace export.** The conversation service persists turn, worker and tool traces. OpenTelemetry export remains open.
-9. **Web tests cover formatting only.** The flow is covered end-to-end at the API level; a
-   Playwright suite is the next step.
+9. **Browser coverage.** Chromium exercises sign-in and parallel chat. Underwriting and recovery are exercised through the API and persistence layers.
 
 See [`docs/PRODUCTION-READINESS.md`](docs/PRODUCTION-READINESS.md) for the full fix-by-fix record
 against the original review, including what is still open and why.

@@ -1,0 +1,13 @@
+[
+  "CREATE TABLE IF NOT EXISTS conversation_sessions (\n\tid VARCHAR(32) NOT NULL, \n\tcustomer_id VARCHAR(32) NOT NULL, \n\tstate VARCHAR(32) NOT NULL, \n\tapplication_id VARCHAR(32), \n\trequested_amount_paise INTEGER, \n\ttenure_months INTEGER, \n\tllm_calls INTEGER NOT NULL, \n\tversion INTEGER NOT NULL, \n\tcreated_at DATETIME NOT NULL, \n\tupdated_at DATETIME NOT NULL, \n\tPRIMARY KEY (id)\n)",
+  "CREATE TABLE IF NOT EXISTS conversation_attempts (\n\tsession_id VARCHAR(32) NOT NULL, \n\tattempt_id VARCHAR(32) NOT NULL, \n\tPRIMARY KEY (session_id), \n\tFOREIGN KEY(session_id) REFERENCES conversation_sessions (id)\n)",
+  "CREATE TABLE IF NOT EXISTS conversation_latest_documents (\n\tsession_id VARCHAR(32) NOT NULL, \n\tdocument_id VARCHAR(32) NOT NULL, \n\tPRIMARY KEY (session_id), \n\tFOREIGN KEY(session_id) REFERENCES conversation_sessions (id)\n)",
+  "CREATE TABLE IF NOT EXISTS conversation_turn_traces (\n\tid VARCHAR(32) NOT NULL, \n\tsession_id VARCHAR(32) NOT NULL, \n\tdetail JSON NOT NULL, \n\tcreated_at DATETIME NOT NULL, \n\tPRIMARY KEY (id), \n\tFOREIGN KEY(session_id) REFERENCES conversation_sessions (id)\n)",
+  "CREATE TABLE IF NOT EXISTS messages (\n\tid VARCHAR(32) NOT NULL, \n\tsession_id VARCHAR(32) NOT NULL, \n\trole VARCHAR(16) NOT NULL, \n\tcontent TEXT NOT NULL, \n\tcreated_at DATETIME NOT NULL, \n\tPRIMARY KEY (id), \n\tFOREIGN KEY(session_id) REFERENCES conversation_sessions (id)\n)",
+  "CREATE TABLE IF NOT EXISTS pending_agent_questions (\n\tsession_id VARCHAR(32) NOT NULL, \n\tquestion TEXT NOT NULL, \n\tPRIMARY KEY (session_id), \n\tFOREIGN KEY(session_id) REFERENCES conversation_sessions (id)\n)",
+  "CREATE TABLE IF NOT EXISTS transitions (\n\tid VARCHAR(32) NOT NULL, \n\tsession_id VARCHAR(32) NOT NULL, \n\tfrom_state VARCHAR(32) NOT NULL, \n\tto_state VARCHAR(32) NOT NULL, \n\tevent VARCHAR(48) NOT NULL, \n\tcreated_at DATETIME NOT NULL, \n\tPRIMARY KEY (id), \n\tFOREIGN KEY(session_id) REFERENCES conversation_sessions (id)\n)",
+  "CREATE INDEX IF NOT EXISTS ix_conversation_sessions_customer_id ON conversation_sessions (customer_id)",
+  "CREATE INDEX IF NOT EXISTS ix_conversation_turn_traces_session_id ON conversation_turn_traces (session_id)",
+  "CREATE INDEX IF NOT EXISTS ix_messages_session_id ON messages (session_id)",
+  "CREATE INDEX IF NOT EXISTS ix_transitions_session_id ON transitions (session_id)"
+]

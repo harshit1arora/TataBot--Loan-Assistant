@@ -6,11 +6,14 @@ Use a fresh synthetic applicant with a verified +91 mobile number.
 
 from __future__ import annotations
 
+import json
 import os
 from io import BytesIO
 
 import httpx
 from reportlab.pdfgen import canvas
+
+from agent_quality import model_cost
 
 
 def main() -> None:
@@ -57,6 +60,8 @@ def main() -> None:
             conversation + "/sessions/" + body["session_id"] + "/trace", headers=customer
         ).json()
         evidence = next(t for t in trace["turns"] if t["trace_id"] == body["trace_id"])
+        if os.getenv("REQUIRE_LIVE_GEMINI") == "1":
+            assert evidence["router"] == "llm:gemini" and evidence["router_detail"]["model"], evidence["router"]
         workers = evidence["workers"]
         assert set(workers) == set(body["agent_route"])
         assert max(w["started_at"] for w in workers.values()) < min(
@@ -121,6 +126,9 @@ def main() -> None:
         assert summary["consent_version"] == "income-assessment-v1"
         assert summary["quote"]["quote_id"] == quote["quote_id"]
         assert final["decision"]["emi_paise"] == quote["emi_paise"]
+        traces = [evidence.get("router_detail", {}), *workers.values()]
+        calls, cost = model_cost(traces, json.loads(os.getenv("BENCH_USD_PER_MILLION", "{}")))
+        print("Completed application agent cost", json.dumps({"applications": 1, "model_calls": len(calls), "estimated_usd": cost}))
         letter = post(f"/v1/applications/{app_id}/sanction", customer)
         signed = client.get(
             core + f"/v1/documents/{letter['document_id']}/signed-url", headers=customer

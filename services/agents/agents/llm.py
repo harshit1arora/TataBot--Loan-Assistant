@@ -21,11 +21,21 @@ from decimal import Decimal
 from typing import Protocol
 
 from .config import ROLES, Settings, key_for
+from .telemetry import active_worker, router_event
 
 logger = logging.getLogger("agents.llm")
 
 NUMBER = re.compile(r"\d[\d,]*(?:\.\d+)?")
 
+
+def model_attempt(model: str) -> dict:
+    record = active_worker.get()
+    if record is None:
+        record = router_event.get()
+    attempt = {"model": model, "input": None, "output": None}
+    if record is not None:
+        record.setdefault("model_calls", []).append(attempt)
+    return attempt
 
 class LlmUnavailable(RuntimeError):
     pass
@@ -84,10 +94,13 @@ class GroqLLM:
         }
         if json_mode:
             kwargs["response_format"] = {"type": "json_object"}
+        attempt = model_attempt(self.settings.groq_model)
         response = await asyncio.wait_for(
             self._client.chat.completions.create(**kwargs),
             timeout=self.settings.llm_timeout_seconds,
         )
+        if usage := getattr(response, "usage", None):
+            attempt.update(input=usage.prompt_tokens, output=usage.completion_tokens)
         return response.choices[0].message.content or ""
 
     async def complete(self, prompt: str, *, system: str = "") -> str:
@@ -126,6 +139,7 @@ class GeminiLLM:
             raise LlmUnavailable("gemini is not configured")
         from google.genai import types
 
+        attempt = model_attempt(self.settings.gemini_model)
         response = await asyncio.wait_for(
             self._client.aio.models.generate_content(
                 model=self.settings.gemini_model,
@@ -136,6 +150,9 @@ class GeminiLLM:
             ),
             timeout=self.settings.llm_timeout_seconds,
         )
+        usage = getattr(response, "usage_metadata", None)
+        if usage and usage.prompt_token_count is not None and usage.total_token_count is not None:
+            attempt.update(input=usage.prompt_token_count, output=usage.total_token_count - usage.prompt_token_count)
         return response.text or ""
 
     async def complete_json(self, prompt: str, *, system: str = "") -> dict:
