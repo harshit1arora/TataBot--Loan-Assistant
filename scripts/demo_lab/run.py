@@ -50,6 +50,7 @@ def run() -> None:
         env = dict(
             os.environ,
             ENV="test",
+            RATE_LIMIT_PER_MINUTE="100000",
             ALLOW_DEMO_AUTH="true",
             JWT_SECRET=secret,
             SERVICE_CLIENT_SECRET=secret,
@@ -183,3 +184,4 @@ def run() -> None:
 
 if __name__ == "__main__":
     run()
+
