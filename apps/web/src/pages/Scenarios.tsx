@@ -17,6 +17,7 @@ type Quote = {
 };
 type Summary = {
   reasons: string[];
+  timeline: { at: string; event: string }[];
   verified_income_paise: number | null;
   application: ApplicationView;
   next_action: string;
@@ -258,6 +259,12 @@ export default function Scenarios() {
                 </p>
               )}
               <strong>{summary.next_action}</strong>
+              <h3 className="font-semibold">Application timeline</h3>
+              <ol className="space-y-1">
+                {summary.timeline.map((item, index) => (
+                  <li key={index}>{new Date(item.at).toLocaleString()} · {item.event}</li>
+                ))}
+              </ol>
               {summary.application.status === "document_required" &&
                 !summary.next_action.startsWith("Await") && (
                   <label className="block">
@@ -319,3 +326,4 @@ export default function Scenarios() {
     </main>
   );
 }
+

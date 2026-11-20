@@ -914,6 +914,8 @@ The repository drill covers an offline, consistent snapshot. Scheduled cloud bac
 
 In a local rules-mode sample of 35 turns, all routed to the expected workers. The one-worker p95 was 125 ms (30 turns), and the four-worker p95 was 266 ms (5 turns). Model cost was zero in that run. These figures describe the synthetic sample, not hosted Gemini latency or pricing.
 
+Application summaries display a timeline of recorded submissions, decisions and reviews.
+
 ## Known limitations
 
 Stated plainly, because a README that hides them is worse than one that is short.
@@ -926,7 +928,7 @@ Stated plainly, because a README that hides them is worse than one that is short
    with a bureau pull before any money moves.
 3. **Scanned documents depend on OCR availability.** Inconclusive evidence goes to underwriter review.
    The extractor interface is the seam for OCR or a vendor.
-4. **No bureau, no disbursal, no notifications.** Support messages are stored but not routed to
+4. **No bureau, no disbursal, no notifications.** Support messages are stored without a promised response time and are not yet routed to
    any queue or inbox. The sanction letter is a simulation and says so.
 5. **Fleet limits require Redis.** Configure the shared Redis endpoint for replicated services.
 6. **Schema upgrades.** Core and conversation maintain versioned SQLite and PostgreSQL migrations.

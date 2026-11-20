@@ -191,7 +191,7 @@ export default function Chat() {
             at: message.created_at,
           })),
       );
-      sessionStorage.setItem("tatabot.session", targetSessionId);
+      sessionStorage.setItem("tatabot.sessionId", targetSessionId);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Could not reopen that conversation.");
     } finally {
@@ -540,3 +540,4 @@ export default function Chat() {
     </div>
   );
 }
+

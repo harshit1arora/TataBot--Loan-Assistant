@@ -22,7 +22,7 @@ from ..services import support as support_service
 
 router = APIRouter(tags=["support"], prefix="/v1/support")
 
-EXPECTED_RESPONSE = "within one working day"
+EXPECTED_RESPONSE = "Response time is not yet available"
 
 
 @router.post("/messages", response_model=SupportMessageCreated, status_code=201)
@@ -71,3 +71,4 @@ def list_messages(
         )
         for row in rows
     ]
+

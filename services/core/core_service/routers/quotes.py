@@ -226,7 +226,21 @@ def summary(
         "age_out_of_range": "Age is outside the policy range.",
         "amount_above_max_multiple_of_pre_approved": "The amount exceeds the policy ceiling for your limit.",
     }
+    timeline = [{"at": application.created_at, "event": "Application submitted"}]
+    for document in application.documents:
+        if document.doc_type == "salary_slip":
+            timeline.append({"at": document.created_at, "event": "Salary slip submitted"})
+        elif document.doc_type == "sanction_letter":
+            timeline.append({"at": document.created_at, "event": "Sanction letter issued"})
+    reviews = db.scalars(select(ReviewRecord).where(ReviewRecord.application_id == application.id))
+    for item in reviews:
+        label = "Replacement salary slip requested" if item.action == "replace" else "Income reviewed"
+        timeline.append({"at": item.created_at, "event": label})
+    for item in application.decisions:
+        timeline.append({"at": item.created_at, "event": "Decision: " + item.outcome.replace("_", " ")})
+    timeline.sort(key=lambda item: item["at"].isoformat())
     return {
+        "timeline": timeline,
         "reasons": [explanations.get(r, r.replace("_", " ")) for r in decision.reason_codes]
         if decision
         else [],
@@ -261,3 +275,5 @@ def assess(
         "application": _application_view(db, application),
         "requires_review": doc.requires_review,
     }
+
+
