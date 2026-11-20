@@ -98,7 +98,7 @@ jobs:
           npm ci --prefix apps/web
           pip install playwright==1.65.2
           python -m playwright install --with-deps chromium
-          python scripts/demo_lab/run.py --browser --tracing
+          python scripts/demo_lab/run.py --browser --tracing --privacy
           python scripts/demo_lab/run.py --langfuse-only
       - name: PostgreSQL migrations, reviewed application and restore
         run: |

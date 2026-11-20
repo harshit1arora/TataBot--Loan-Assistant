@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 from ..config import Settings, get_settings
 from ..db import get_db
 from ..errors import NotFoundError, ValidationAppError
-from ..models import Document
+from ..models import Document, PrivacyRequest
 from ..ratelimit import enforce
 from ..schemas import DocumentView, SignedUrlResponse
 from ..security import (
@@ -113,7 +113,7 @@ def download(
     """Signed link redemption — no bearer token needed, the signature is the grant."""
     document_id, customer_id = verify_download_token(token, settings)
     document = db.get(Document, document_id)
-    if document is None or document.customer_id != customer_id:
+    if db.get(PrivacyRequest, customer_id) or document is None or document.customer_id != customer_id:
         raise NotFoundError("Document not found.")
     store = _store(settings)
     if not store.exists(document.storage_key):

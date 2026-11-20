@@ -36,12 +36,10 @@ def create_message(
 
     # Attach the ticket to the customer when a token is present, but do not require one.
     customer_id: str | None = None
-    try:
+    if request.headers.get("authorization"):
         principal: Principal = get_principal(request, settings)
         if principal.scope == "customer":
             customer_id = principal.subject
-    except Exception:  # noqa: BLE001 - anonymous contact is a supported path
-        customer_id = None
 
     record = support_service.create(
         db,

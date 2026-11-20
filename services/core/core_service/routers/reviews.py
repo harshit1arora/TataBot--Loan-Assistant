@@ -23,6 +23,7 @@ from ..models import (
     Document,
     ReviewAssignment,
     ReviewRecord,
+    PrivacyRequest,
 )
 from ..services import audit, notifications, underwriting
 from ..storage import build_store
@@ -50,6 +51,7 @@ def pending(db: Session):
         select(Document)
         .join(Application)
         .where(
+            ~select(PrivacyRequest.customer_id).where(PrivacyRequest.customer_id == Document.customer_id).exists(),
             Document.requires_review.is_(True),
             Document.doc_type == "salary_slip",
             Application.status == "document_required",

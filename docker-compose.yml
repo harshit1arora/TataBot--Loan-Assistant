@@ -46,6 +46,7 @@ services:
     environment:
       DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-tatabot}:${POSTGRES_PASSWORD:-tatabot}@db:5432/${POSTGRES_DB:-tatabot}
       STORAGE_DIR: /srv/data/storage
+      CONVERSATION_BASE_URL: http://conversation:8001
     volumes:
       - documents:/srv/data/storage
     depends_on:

@@ -21,6 +21,8 @@ from fastapi import Depends, Request
 
 from .config import Settings, get_settings
 from .errors import AuthenticationError, AuthorisationError
+from .db import SessionLocal
+from .models import PrivacyRequest
 
 Scope = Literal["customer", "service"]
 
@@ -110,7 +112,12 @@ def _bearer(request: Request) -> str:
 
 
 def get_principal(request: Request, settings: Settings = Depends(get_settings)) -> Principal:
-    return decode_token(_bearer(request), settings)
+    principal = decode_token(_bearer(request), settings)
+    if principal.scope == "customer" and not request.url.path.startswith("/v1/privacy"):
+        with SessionLocal() as db:
+            if db.get(PrivacyRequest, principal.subject):
+                raise AuthorisationError("Consent has been withdrawn.")
+    return principal
 
 
 def require_customer(principal: Principal = Depends(get_principal)) -> Principal:

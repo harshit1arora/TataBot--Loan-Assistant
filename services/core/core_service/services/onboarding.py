@@ -20,7 +20,7 @@ from sqlalchemy.orm import Session
 
 from ..config import Settings
 from ..errors import ConflictError, ValidationAppError
-from ..models import Customer
+from ..models import Customer, PrivacyRequest
 from ..money import paise_to_rupees, rupees_to_paise
 from ..policy import build_policy
 from ..services import audit
@@ -48,7 +48,7 @@ def _next_customer_id(db: Session) -> str:
     except ValueError:
         number = 1
     candidate = f"CUST{number:03d}"
-    while db.get(Customer, candidate) is not None:  # extremely unlikely, but be safe
+    while db.get(Customer, candidate) is not None or db.get(PrivacyRequest, candidate) is not None:  # extremely unlikely, but be safe
         number += 1
         candidate = f"CUST{number:03d}"
     return candidate

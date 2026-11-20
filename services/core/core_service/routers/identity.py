@@ -13,7 +13,7 @@ from sqlalchemy.orm import Session
 
 from ..config import Settings, get_settings
 from ..db import get_db
-from ..models import VerifiedIdentity
+from ..models import VerifiedIdentity, PrivacyRequest
 from ..ratelimit import enforce
 from ..schemas import RegisterCustomerRequest
 from ..security import issue_customer_token
@@ -89,5 +89,7 @@ def exchange(
         )
         db.add(linked)
         db.flush()
+    if db.get(PrivacyRequest, linked.customer_id):
+        raise HTTPException(403, "Consent has been withdrawn.")
     token, ttl = issue_customer_token(linked.customer_id, settings)
     return {"customer_id": linked.customer_id, "access_token": token, "expires_in": ttl}

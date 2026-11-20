@@ -33,6 +33,8 @@ def upgrade(engine: Engine) -> None:
             [1, 2, 3, 4, 5],
             [1, 2, 3, 4, 5, 6],
             [1, 2, 3, 4, 5, 6, 7],
+            [1, 2, 3, 4, 5, 6, 7, 8],
+            [1, 2, 3, 4, 5, 6, 7, 8, 9],
         ):
             raise RuntimeError(f"Unknown database revisions {existing}")
         if not existing:
@@ -81,3 +83,15 @@ def upgrade(engine: Engine) -> None:
             for statement in json.loads((DIRECTORY / f"007_{dialect}.json").read_text()):
                 execute(statement)
             execute("INSERT INTO tatabot_core_revision VALUES (7)")
+
+        if 8 not in existing:
+            for statement in json.loads((DIRECTORY / f"008_{dialect}.json").read_text()):
+                execute(statement)
+            execute("INSERT INTO tatabot_core_revision VALUES (8)")
+
+        if 9 not in existing:
+            columns = {column["name"] for column in inspect(connection).get_columns("support_messages")}
+            if "closed_at" not in columns:
+                for statement in json.loads((DIRECTORY / f"009_{dialect}.json").read_text()):
+                    execute(statement)
+            execute("INSERT INTO tatabot_core_revision VALUES (9)")

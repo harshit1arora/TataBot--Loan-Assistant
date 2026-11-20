@@ -1030,3 +1030,43 @@ The Cloud Run renderer forwards the OTLP endpoint when set. Set `OTEL_AUTH_ENABL
 Spans include service, routing, worker and tool names, outcomes, timing, model name, and available token counts. Conversation spans carry the persisted turn ID and propagate W3C context to the agent and core services. Langfuse receives the agent's router, parallel worker, tool and model spans. The implementation deliberately does not export user questions, model prompts or answers, customer identifiers, request headers, document text, or exception messages. Model output and prompts cannot be inspected in Langfuse with this configuration. MCP invocations are traced from the agent; the MCP server is not independently instrumented.
 
 Verify locally with `python scripts/demo_lab/run.py --browser --tracing`. The lab uses local OTLP and Langfuse-compatible receivers, verifies the same turn ID and parent-child links across the three services, checks all four agent spans, and checks that synthetic sensitive content is absent. Run `python scripts/demo_lab/run.py --langfuse-only` to verify correlation when only Langfuse is configured. A live Langfuse instance and live model require separately configured credentials. Batch export is asynchronous and best effort. Monitor exporter errors and your collector independently, and use an operational collector for metrics and logs.
+
+## Privacy requests and conversation retention
+
+Customers with a current bearer token can call `POST /v1/privacy/withdraw`, then
+`POST /v1/privacy/erase` with JSON `{"confirm":"ERASE"}`, and `GET /v1/privacy` for status. Erasure also withdraws
+consent. New core and chat requests and signed document downloads are denied after
+withdrawal; chat checks the core service on every request and fails closed during a
+core outage. Existing demo and OIDC login are blocked for withdrawn accounts.
+The worker retries `erasure_pending` requests. Set `CONVERSATION_BASE_URL` for the
+worker to the private conversation service URL. Docker Compose and the Cloud Run
+manifest configure it. The two services must share `SERVICE_CLIENT_SECRET` /
+`CORE_CLIENT_SECRET`; keep the internal endpoint private. Run
+`python -m core_service.worker --once` for a single pass. `local_erased` means the
+worker deleted the known live database rows, conversations and document objects;
+it does **not** certify deletion from external systems. The customer ID tombstone
+is retained to prevent token and identifier reuse. Request status is accessible with
+the original unexpired token; operational tracking after expiry is not yet provided.
+
+Set `CONVERSATION_RETENTION_DAYS` to a positive, organization-approved number to
+purge conversation sessions inactive for that long. It is disabled by default. The
+worker invokes it periodically and on `--once`. This setting covers conversation
+sessions and their dependent records. Set `SUPPORT_RETENTION_DAYS` separately to
+purge closed support requests after that many days from closure. Older requests
+without a recorded closure date are retained. Both settings are disabled by default.
+Neither setting purges lending records, general audit logs, backups, or third-party data. Choose retention periods and legal holds with
+appropriate counsel before handling real customer data.
+
+**Limits:** Backup snapshots, point-in-time recovery, logs, already delivered email,
+identity providers, agent/CRM integrations and exported OpenTelemetry or Langfuse
+traces are outside this deletion job. S3 version deletion requires version-list and
+version-delete permissions; a mounted GCS bucket exposes only the current file, not
+older object generations. Configure external lifecycle/deletion procedures and check
+restored backups against tombstones before serving them. The present implementation
+also does not drain requests already in flight when withdrawal or purge begins, or
+provide legal holds, a privacy operations UI, or end-to-end proof of third-party
+erasure. Do not treat this demo as DPDP compliance or a production erasure system.
+
+For a synthetic cross-process privacy check run `python scripts/demo_lab/run.py --privacy`;
+`services/conversation/tests/test_privacy_workflow.py` covers failure and retry,
+withdrawal, signed-link revocation, local document deletion, and the retention cutoff.

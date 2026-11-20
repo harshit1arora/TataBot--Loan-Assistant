@@ -57,6 +57,7 @@ class ObjectStore(Protocol):
     def save(self, customer_id: str, content_type: str, data: bytes) -> StoredObject: ...
     def read(self, key: str) -> bytes: ...
     def exists(self, key: str) -> bool: ...
+    def delete(self, key: str) -> None: ...
 
 
 class _ValidatingStore:
@@ -94,6 +95,9 @@ class LocalObjectStore(_ValidatingStore):
 
     def exists(self, key: str) -> bool:
         return self.path_for_key(key).is_file()
+
+    def delete(self, key: str) -> None:
+        self.path_for_key(key).unlink(missing_ok=True)
 
     def path_for_key(self, key: str) -> Path:
         candidate = (self.root / key).resolve()
@@ -137,6 +141,21 @@ class S3ObjectStore(_ValidatingStore):
             ServerSideEncryption="AES256",
         )
         return StoredObject(key=key, sha256=hashlib.sha256(data).hexdigest(), size_bytes=len(data))
+
+    def delete(self, key: str) -> None:
+        # Delete versions and delete markers, not only the current version. Fail closed
+        # if listing or deletion is denied by policy, object lock, or the provider.
+        paginator = self.client.get_paginator("list_object_versions")
+        objects = []
+        for page in paginator.paginate(Bucket=self.bucket, Prefix=key):
+            for version in page.get("Versions", []) + page.get("DeleteMarkers", []):
+                if version["Key"] == key:
+                    objects.append({"Key": key, "VersionId": version["VersionId"]})
+        for start in range(0, len(objects), 1000):
+            response = self.client.delete_objects(Bucket=self.bucket, Delete={"Objects": objects[start:start + 1000]})
+            if response.get("Errors"):
+                raise RuntimeError("Object version deletion failed")
+        self.client.delete_object(Bucket=self.bucket, Key=key)
 
     def read(self, key: str) -> bytes:
         response = self.client.get_object(Bucket=self.bucket, Key=key)

@@ -232,4 +232,5 @@ def support_action(
         raise HTTPException(409, "Support request is assigned to another staff member.")
     if body.action == "close":
         row.status = "closed"
+        row.closed_at = datetime.now(UTC)
     return {"reference": reference, "status": row.status, "owner": actor}

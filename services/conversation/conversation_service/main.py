@@ -20,7 +20,7 @@ from .errors import AppError
 from .llm import LlmClient
 from .logging_setup import configure_logging, get_logger, request_id_var
 from .orchestrator import Orchestrator
-from .routers import chat, health, operations
+from .routers import chat, health, operations, privacy
 
 settings = get_settings()
 configure_logging(settings.log_level, settings.service_name)
@@ -153,6 +153,7 @@ async def stale_turn(request: Request, exc: StaleDataError) -> JSONResponse:
         "message": "Another turn updated this session. Refresh the session before continuing."}})
 
 
+app.include_router(privacy.router)
 app.include_router(operations.router)
 app.include_router(health.router)
 app.include_router(chat.router)

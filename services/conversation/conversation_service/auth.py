@@ -11,7 +11,7 @@ import jwt
 from fastapi import Depends, Request
 
 from .config import Settings, get_settings
-from .errors import AuthenticationError, AuthorisationError
+from .errors import ServiceUnavailable, AuthenticationError, AuthorisationError
 
 
 @dataclass(frozen=True)
@@ -19,7 +19,7 @@ class Principal:
     customer_id: str
 
 
-def get_principal(request: Request, settings: Settings = Depends(get_settings)) -> Principal:
+async def get_principal(request: Request, settings: Settings = Depends(get_settings)) -> Principal:
     header = request.headers.get("authorization", "")
     scheme, _, token = header.partition(" ")
     if scheme.lower() != "bearer" or not token.strip():
@@ -41,4 +41,12 @@ def get_principal(request: Request, settings: Settings = Depends(get_settings)) 
 
     if claims.get("scope") != "customer":
         raise AuthorisationError("This endpoint requires a customer token.")
+    # Check the authoritative core service on every request; fail closed if unavailable.
+    from .clients import CoreServiceError
+    try:
+        await request.app.state.orchestrator.core.profile(token.strip())
+    except CoreServiceError as exc:
+        if exc.status_code in (401, 403, 404):
+            raise AuthorisationError("Customer access is unavailable.") from exc
+        raise ServiceUnavailable("Unable to verify customer access.") from exc
     return Principal(customer_id=str(claims["sub"]))

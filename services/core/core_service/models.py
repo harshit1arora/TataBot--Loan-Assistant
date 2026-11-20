@@ -151,6 +151,7 @@ class SupportMessage(Base):
     topic: Mapped[str] = mapped_column(String(48), default="general")
     message: Mapped[str] = mapped_column(Text)
     status: Mapped[str] = mapped_column(String(16), default="open", index=True)
+    closed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     request_id: Mapped[str] = mapped_column(String(64), default="-")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, index=True)
 
@@ -279,3 +280,12 @@ class ShadowPrediction(Base):
     disagreement: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
     error_type: Mapped[str | None] = mapped_column(String(80), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class PrivacyRequest(Base):
+    __tablename__ = "privacy_requests"
+    customer_id: Mapped[str] = mapped_column(String(32), primary_key=True)
+    status: Mapped[str] = mapped_column(String(32), default="withdrawn")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
+    last_error: Mapped[str | None] = mapped_column(String(100), nullable=True)

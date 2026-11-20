@@ -38,3 +38,8 @@ class ValidationAppError(AppError):
 class ConflictError(AppError):
     status_code = 409
     code = "conflict"
+
+
+class ServiceUnavailable(AppError):
+    status_code = 503
+    code = "core_unavailable"

@@ -1,0 +1,3 @@
+[
+  "ALTER TABLE support_messages ADD COLUMN closed_at TIMESTAMP WITH TIME ZONE"
+]

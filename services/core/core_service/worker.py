@@ -17,7 +17,7 @@ import time
 from .config import get_settings
 from .db import create_all, session_scope
 from .logging_setup import configure_logging, get_logger
-from .services import backup_monitor, notifications
+from .services import backup_monitor, notifications, privacy
 from .services import documents as document_service
 from .storage import build_store
 
@@ -28,6 +28,7 @@ def run_once() -> int:
     settings = get_settings()
     store = build_store(settings)
     processed = 0
+    privacy.process_pending()
     with session_scope() as db:
         notifications.schedule_escalations(db)
     while notifications.deliver_once():
@@ -51,6 +52,7 @@ def main() -> None:
     configure_logging(settings.log_level, "core-worker")
     create_all()
     if args.once:
+        privacy.run_retention()
         with session_scope() as db:
             backup_monitor.poll(db)
         print(f"processed {run_once()} job(s)")
@@ -58,6 +60,10 @@ def main() -> None:
     last_monitor = 0.0
     while True:
         if time.monotonic() - last_monitor >= float(os.getenv("BACKUP_MONITOR_INTERVAL_SECONDS", "300")):
+            try:
+                privacy.run_retention()
+            except Exception:
+                logger.exception("Conversation retention failed", extra={"event": "retention_failed"})
             with session_scope() as db:
                 backup_monitor.poll(db)
             last_monitor = time.monotonic()

@@ -136,6 +136,12 @@ def run() -> None:
         for script in ("company_demo.py", "agent_quality.py", "smoke_test.py"):
             subprocess.run([sys.executable, str(ROOT / "scripts" / script)], env=env, check=True)
 
+        if "--privacy" in sys.argv:
+            privacy_env = dict(env, LAB_CORE_DIR=str(ROOT / "services" / "core"),
+                               LAB_CORE_DB=f"sqlite:///{directory}/core.db")
+            subprocess.run([sys.executable, str(ROOT / "scripts" / "demo_lab" / "privacy_lab.py")],
+                           env=privacy_env, check=True)
+
         if "--browser" in sys.argv:
             with socket.socket() as sock:
                 sock.bind(("127.0.0.1", 0))

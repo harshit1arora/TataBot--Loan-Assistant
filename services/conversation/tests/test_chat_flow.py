@@ -142,8 +142,8 @@ def test_core_outage_degrades_gracefully(client, auth, monkeypatch):
 
     monkeypatch.setattr(client.app.state.orchestrator.core, "profile", boom)
     response = _chat(client, auth, "hello")
-    assert response.status_code == 200
-    assert "can't reach the lending service" in response.json()["reply"].lower()
+    assert response.status_code == 503
+    assert response.json()["error"]["code"] == "core_unavailable"
 
 
 def test_asking_for_a_human_returns_contact_options_without_moving_the_flow(client, auth):

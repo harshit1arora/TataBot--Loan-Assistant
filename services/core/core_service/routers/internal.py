@@ -14,7 +14,7 @@ from sqlalchemy.orm import Session
 from ..config import Settings, get_settings
 from ..db import get_db
 from ..errors import NotFoundError, PolicyRejection
-from ..models import Document
+from ..models import Document, PrivacyRequest
 from ..money import compute_emi_paise, paise_to_rupees, rupees_to_paise
 from ..policy import Applicant, build_policy, decide
 from ..schemas import DecisionView, DocumentView, EligibilityPreviewRequest
@@ -93,7 +93,7 @@ def process_document(
 ) -> DocumentView:
     """Extract now instead of waiting for the queue (small uploads, a customer waiting)."""
     document = db.get(Document, document_id)
-    if document is None:
+    if document is None or db.get(PrivacyRequest, document.customer_id):
         raise NotFoundError("Document not found.")
     document_service.process_now(
         db, settings=settings, store=build_store(settings), document=document
@@ -119,7 +119,7 @@ def read_document(
 ) -> DocumentView:
     """Read verification state for the authenticated customer supplied by chat."""
     document = db.get(Document, document_id)
-    if document is None or document.customer_id != customer_id:
+    if document is None or document.customer_id != customer_id or db.get(PrivacyRequest, customer_id):
         raise NotFoundError("Document not found.")
     return DocumentView(
         document_id=document.id,

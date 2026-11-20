@@ -7,7 +7,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from ..errors import NotFoundError
-from ..models import Customer
+from ..models import Customer, PrivacyRequest
 from ..money import rupees_to_paise
 
 DEMO_CUSTOMERS = [
@@ -28,6 +28,7 @@ DEMO_CUSTOMERS = [
 def seed(db: Session) -> int:
     """Idempotent: inserts only the customers that are missing."""
     existing = {cid for (cid,) in db.execute(select(Customer.id))}
+    existing.update(db.scalars(select(PrivacyRequest.customer_id)))
     added = 0
     for cid, name, age, city, phone, email, limit, salary, score in DEMO_CUSTOMERS:
         if cid in existing:
@@ -51,7 +52,7 @@ def seed(db: Session) -> int:
 
 
 def get_or_404(db: Session, customer_id: str) -> Customer:
-    customer = db.get(Customer, customer_id)
+    customer = None if db.get(PrivacyRequest, customer_id) else db.get(Customer, customer_id)
     if customer is None:
         raise NotFoundError("Customer not found.")
     return customer

@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 from ..config import Settings
 from ..errors import NotFoundError, ValidationAppError
 from ..extractors import build_extractor
-from ..models import Document, ExtractionJob
+from ..models import Document, ExtractionJob, PrivacyRequest
 from ..ocr import build_ocr
 from ..services import audit
 from ..storage import ObjectStore
@@ -95,6 +95,9 @@ def process_next_job(db: Session, *, settings: Settings, store: ObjectStore) -> 
     db.flush()
 
     document = db.scalar(select(Document).where(Document.id == job.document_id).with_for_update())
+    if document is not None and db.get(PrivacyRequest, document.customer_id):
+        job.status = "cancelled"
+        return document.id
     if document is not None and document.status != "stored":
         job.status = "done"
         return document.id

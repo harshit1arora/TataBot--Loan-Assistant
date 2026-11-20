@@ -13,7 +13,7 @@ from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.orm import Session
 
 from ..db import session_scope
-from ..models import Application, Customer, CustomerNotice, Delivery, Document
+from ..models import Application, Customer, CustomerNotice, Delivery, Document, PrivacyRequest
 
 
 def enqueue(db: Session, key: str, category: str, recipient: str, subject: str, body: str) -> None:
@@ -122,9 +122,14 @@ def deliver_once() -> bool:
         item = db.get(Delivery, candidate)
         if not item:
             return True
+        if item.event_key.startswith("notice:"):
+            notice = db.get(CustomerNotice, item.event_key.removeprefix("notice:"))
+            if not notice or db.get(PrivacyRequest, notice.customer_id):
+                item.status = "cancelled"
+                return True
         if item.category == "escalation":
             doc = db.get(Document, item.event_key.removeprefix("review:"))
-            if not doc or not doc.requires_review:
+            if not doc or not doc.requires_review or db.get(PrivacyRequest, doc.customer_id):
                 item.status = "cancelled"
                 return True
         message = EmailMessage()

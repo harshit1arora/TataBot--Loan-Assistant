@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 from ..config import Settings, get_settings
 from ..db import get_db
 from ..errors import AuthenticationError, NotFoundError
-from ..models import Customer
+from ..models import Customer, PrivacyRequest
 from ..ratelimit import enforce
 from ..schemas import ServiceTokenRequest, TokenRequest, TokenResponse
 from ..security import (
@@ -39,6 +39,9 @@ def customer_token(
     customer = db.get(Customer, payload.customer_id)
     if customer is None:
         raise NotFoundError("Customer not found.")
+
+    if db.get(PrivacyRequest, customer.id):
+        raise AuthenticationError("Consent has been withdrawn.")
 
     result = kyc.authenticate(db, customer, payload.phone, kyc.DemoKycProvider())
     if not result.phone_verified:
