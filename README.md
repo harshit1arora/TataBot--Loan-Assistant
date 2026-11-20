@@ -862,7 +862,7 @@ checks) and **Dependabot** for the three dependency manifests.
 
 ## Staging, browser acceptance and recovery
 
-The repeatable lab starts the six HTTP services with synthetic identities, drives an application through review, submits a second question through the React UI in Chromium, then stops the writers and restores into a fresh directory. Install the pilot dependencies above, and run:
+The repeatable lab starts the six HTTP services with synthetic identities, drives an application through review, registers a fresh applicant through a loopback OIDC authorization-code and PKCE flow, then drives chat, evidence review, approval and PDF download in two isolated Chromium sessions, then stops the writers and restores into a fresh directory. Install the pilot dependencies above, and run:
 
 ```sh
 npm ci --prefix apps/web
@@ -887,7 +887,7 @@ gcloud run services replace staging-service.json --project "$GOOGLE_CLOUD_PROJEC
 python scripts/browser_demo.py "$STAGING_URL"
 ```
 
-The hosted browser check opens a visible browser for synthetic applicant sign-in, sends the four-part question, checks the displayed answer and verifies a persisted Gemini router trace. The separate company demo above verifies enrollment, reviewer authorization, the final decision and PDF. Set `REQUIRE_LIVE_GEMINI=1` to require live routing there too.
+The hosted browser check opens a visible browser for a fresh synthetic applicant and a second isolated window for an authorized underwriter. It enrolls the applicant, verifies a four-worker response and a persisted Gemini router trace, accepts a quote, uploads evidence, completes the review, and downloads the issued PDF. The separate company demo above verifies enrollment, reviewer authorization, the final decision and PDF. Set `REQUIRE_LIVE_GEMINI=1` to require live routing there too.
 
 **Schema and recovery.** Core and conversation apply immutable SQL revisions on startup under a transaction lock. Revision 1 adopts the existing schema and revision 2 adds the review queue and session trace indexes. Unknown revisions stop startup. Stop all application writers, including background workers, before backing up both databases and evidence together. Keep archives encrypted in restricted storage. Each restore requires a fresh destination and validates document hashes.
 
@@ -933,7 +933,7 @@ Stated plainly, because a README that hides them is worse than one that is short
 7. **No retention job.** Sessions and audit rows grow without bound; a purge policy is
    outstanding work for DPDP erasure.
 8. **Trace export.** The conversation service persists turn, worker and tool traces. OpenTelemetry export remains open.
-9. **Browser coverage.** Chromium exercises sign-in and parallel chat. Underwriting and recovery are exercised through the API and persistence layers.
+9. **Browser coverage.** Chromium exercises verified enrollment, parallel chat, quote acceptance, reviewer resolution and PDF download. The lab uses an isolated test issuer. Hosted sign-in requires configured provider accounts.
 
 See [`docs/PRODUCTION-READINESS.md`](docs/PRODUCTION-READINESS.md) for the full fix-by-fix record
 against the original review, including what is still open and why.

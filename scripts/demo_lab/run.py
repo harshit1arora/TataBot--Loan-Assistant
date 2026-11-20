@@ -130,6 +130,7 @@ def run() -> None:
             with socket.socket() as sock:
                 sock.bind(("127.0.0.1", 0))
                 port = sock.getsockname()[1]
+            env["LAB_BROWSER_ORIGIN"] = f"http://127.0.0.1:{port}"
             web = subprocess.Popen(
                 [
                     "node",
@@ -142,7 +143,11 @@ def run() -> None:
                 ],
                 cwd=ROOT / "apps" / "web",
                 env=dict(
-                    env, VITE_CORE_URL=urls["core"], VITE_CONVERSATION_URL=urls["conversation"]
+                    env,
+                    VITE_OIDC_ISSUER=env["OIDC_ISSUER"],
+                    VITE_OIDC_CLIENT_ID=env["OIDC_AUDIENCE"],
+                    VITE_CORE_URL=urls["core"],
+                    VITE_CONVERSATION_URL=urls["conversation"],
                 ),
             )
             cleanup.callback(stop, web)
