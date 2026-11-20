@@ -34,7 +34,7 @@ def drill(source):
                 # Reproduce a populated revision-1 deployment, then run the normal startup upgrader twice.
                 index = "ix_review_queue" if svc == "core" else "ix_session_trace_time"
                 b.execute(f"DROP INDEX {index}")
-                b.execute(f"DELETE FROM tatabot_{svc}_revision WHERE revision=2")
+                b.execute(f"DELETE FROM tatabot_{svc}_revision WHERE revision>=2")
                 b.commit()
             subprocess.run(
                 [

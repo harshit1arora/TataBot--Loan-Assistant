@@ -204,3 +204,26 @@ class VerifiedIdentity(Base):
     issuer: Mapped[str] = mapped_column(String(512))
     consent_version: Mapped[str] = mapped_column(String(32))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+class ReviewAssignment(Base):
+    __tablename__ = "review_assignments"
+    document_id: Mapped[str] = mapped_column(ForeignKey("documents.id"), primary_key=True)
+    owner: Mapped[str] = mapped_column(String(255))
+    assigned_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class SupportAssignment(Base):
+    __tablename__ = "support_assignments"
+    message_id: Mapped[str] = mapped_column(ForeignKey("support_messages.id"), primary_key=True)
+    owner: Mapped[str] = mapped_column(String(255))
+    assigned_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class CustomerNotice(Base):
+    __tablename__ = "customer_notices"
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=_uuid)
+    customer_id: Mapped[str] = mapped_column(ForeignKey("customers.id"), index=True)
+    application_id: Mapped[str] = mapped_column(ForeignKey("applications.id"), index=True)
+    message: Mapped[str] = mapped_column(String(255))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    read_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

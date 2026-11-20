@@ -1,6 +1,7 @@
 import { BrowserRouter, Route, Routes } from "react-router-dom";
 import { Toaster } from "@/components/ui/sonner";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
+import Operations from "@/pages/Operations";
 import Scenarios from "@/pages/Scenarios";
 import Review from "@/pages/Review";
 import Identity from "@/pages/Identity";
@@ -19,6 +20,7 @@ export default function App() {
         <Routes>
           <Route path="/identity" element={<Identity />} />
           <Route path="/scenarios" element={<Scenarios />} />
+          <Route path="/operations" element={<Operations />} />
           <Route path="/review" element={<Review />} />
           <Route path="/" element={<Home />} />
           <Route path="/login" element={<Login />} />

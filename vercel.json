@@ -25,6 +25,10 @@
       "destination": "/index.html"
     },
     {
+      "source": "/operations",
+      "destination": "/index.html"
+    },
+    {
       "source": "/review",
       "destination": "/index.html"
     },

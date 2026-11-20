@@ -26,6 +26,7 @@ from .routers import (
     health,
     identity,
     internal,
+    operations,
     quotes,
     reviews,
     support,
@@ -163,6 +164,7 @@ async def unhandled_error_handler(request: Request, exc: Exception) -> JSONRespo
 
 app.include_router(quotes.router)
 app.include_router(reviews.router)
+app.include_router(operations.router)
 app.include_router(identity.router)
 app.include_router(health.router)
 app.include_router(auth.router)

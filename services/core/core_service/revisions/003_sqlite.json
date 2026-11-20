@@ -1,0 +1,7 @@
+[
+  "CREATE TABLE IF NOT EXISTS review_assignments (\n\tdocument_id VARCHAR(32) NOT NULL, \n\towner VARCHAR(255) NOT NULL, \n\tassigned_at DATETIME NOT NULL, \n\tPRIMARY KEY (document_id), \n\tFOREIGN KEY(document_id) REFERENCES documents (id)\n)",
+  "CREATE TABLE IF NOT EXISTS support_assignments (\n\tmessage_id VARCHAR(32) NOT NULL, \n\towner VARCHAR(255) NOT NULL, \n\tassigned_at DATETIME NOT NULL, \n\tPRIMARY KEY (message_id), \n\tFOREIGN KEY(message_id) REFERENCES support_messages (id)\n)",
+  "CREATE TABLE IF NOT EXISTS customer_notices (\n\tid VARCHAR(32) NOT NULL, \n\tcustomer_id VARCHAR(32) NOT NULL, \n\tapplication_id VARCHAR(32) NOT NULL, \n\tmessage VARCHAR(255) NOT NULL, \n\tcreated_at DATETIME NOT NULL, \n\tread_at DATETIME, \n\tPRIMARY KEY (id), \n\tFOREIGN KEY(customer_id) REFERENCES customers (id), \n\tFOREIGN KEY(application_id) REFERENCES applications (id)\n)",
+  "CREATE INDEX IF NOT EXISTS ix_customer_notices_application_id ON customer_notices (application_id)",
+  "CREATE INDEX IF NOT EXISTS ix_customer_notices_customer_id ON customer_notices (customer_id)"
+]

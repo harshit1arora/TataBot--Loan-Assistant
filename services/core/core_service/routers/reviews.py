@@ -4,16 +4,19 @@ from __future__ import annotations
 
 import hashlib
 import os
+from datetime import UTC, datetime
 from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Response
 from pydantic import BaseModel, Field
 from sqlalchemy import select, update
+from sqlalchemy.dialects.postgresql import insert as pg_insert
+from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.orm import Session
 
 from ..config import Settings, get_settings
 from ..db import get_db
-from ..models import Application, Document, ReviewRecord
+from ..models import Application, CustomerNotice, Document, ReviewAssignment, ReviewRecord
 from ..services import audit, underwriting
 from ..storage import build_store
 from .applications import _application_view
@@ -56,10 +59,33 @@ def queue(_: str = Depends(reviewer), db: Session = Depends(get_db)) -> list[dic
             "filename": doc.original_filename,
             "confidence": doc.extraction_confidence,
             "fields": doc.extracted_fields,
+            "owner": (
+                db.get(ReviewAssignment, doc.id).owner if db.get(ReviewAssignment, doc.id) else None
+            ),
+            "waiting_since": doc.created_at,
+            "overdue": (datetime.now(UTC) - doc.created_at.replace(tzinfo=UTC)).total_seconds()
+            >= int(os.getenv("REVIEW_ESCALATION_SECONDS", "86400")),
             "referral": "Income extraction requires human verification",
         }
         for doc in db.scalars(pending(db).order_by(Document.created_at).limit(100))
     ]
+
+
+@router.post("/{document_id}/claim")
+def claim(document_id: str, actor: str = Depends(reviewer), db: Session = Depends(get_db)) -> dict:
+    doc = db.scalar(pending(db).where(Document.id == document_id).with_for_update())
+    if not doc:
+        raise HTTPException(409, "Review is no longer pending.")
+    insert = pg_insert if db.get_bind().dialect.name == "postgresql" else sqlite_insert
+    db.execute(
+        insert(ReviewAssignment)
+        .values(document_id=document_id, owner=actor, assigned_at=datetime.now(UTC))
+        .on_conflict_do_nothing(index_elements=["document_id"])
+    )
+    assignment = db.get(ReviewAssignment, document_id)
+    if not assignment or assignment.owner != actor:
+        raise HTTPException(409, "Review is assigned to another underwriter.")
+    return {"owner": actor}
 
 
 @router.get("/{document_id}/file")
@@ -93,6 +119,9 @@ def resolve(
     application = db.get(Application, doc.application_id)
     if not application:
         raise HTTPException(404, "Application missing.")
+    assignment = db.get(ReviewAssignment, document_id)
+    if assignment and assignment.owner != actor:
+        raise HTTPException(409, "Review is assigned to another underwriter.")
     income = None
     if body.action == "confirm":
         income = (doc.extracted_fields or {}).get("monthly_income_paise")
@@ -126,6 +155,15 @@ def resolve(
         doc.status = "extracted"
         db.flush()
         underwriting.evaluate(db, settings=settings, application=application, reviewed=doc)
+    db.add(
+        CustomerNotice(
+            customer_id=application.customer_id,
+            application_id=application.id,
+            message="A replacement salary slip is required."
+            if body.action == "replace"
+            else f"Your application decision is {application.status.replace(chr(95), chr(32))}.",
+        )
+    )
     audit.record(
         db,
         actor_type="underwriter",

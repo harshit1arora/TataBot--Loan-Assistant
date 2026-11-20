@@ -9,6 +9,9 @@ type Item = {
   confidence: number | null;
   fields: Record<string, unknown> | null;
   referral: string;
+  owner: string | null;
+  waiting_since: string;
+  overdue: boolean;
 };
 
 async function staff(path: string, init: RequestInit = {}) {
@@ -55,6 +58,7 @@ export default function Review() {
   return (
     <main className="mx-auto max-w-4xl p-6 space-y-5">
       <h1 className="text-3xl font-semibold">Underwriter queue</h1>
+      <Link to="/operations">Operations and support</Link>
       <Link to="/identity#review" className="text-blue-800">
         Sign in as an underwriter
       </Link>
@@ -78,7 +82,7 @@ export default function Review() {
             );
           }}
         >
-          {item.filename} · Application {item.application_id}
+          {item.filename} · Application {item.application_id} · {item.owner || "Unassigned"} · Waiting since {new Date(item.waiting_since).toLocaleString()} {item.overdue && "· Overdue"}
         </button>
       ))}
       {selected && (
@@ -111,6 +115,7 @@ export default function Review() {
           }}
         >
           <h2 className="font-semibold">{selected.referral}</h2>
+          <button type="button" onClick={() => void staff("/" + selected.document_id + "/claim", {method:"POST"}).then(load).catch((e) => setMessage(e.message))}>Claim review</button>
           <p>
             Extraction confidence ·{" "}
             {selected.confidence === null

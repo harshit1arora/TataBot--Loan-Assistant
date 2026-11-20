@@ -53,6 +53,8 @@ export default function Scenarios() {
   const [summary, setSummary] = useState<Summary | null>(null);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState("");
+  const [inbox, setInbox] = useState<{id:string; message:string; application_id:string; read_at:string | null}[]>([]);
+  useEffect(() => { if (hasToken()) void request<typeof inbox>("/v1/notices").then(setInbox); }, []);
   async function refresh(id: string) {
     setSummary(await request<Summary>(`/v1/applications/${id}/summary`));
   }
@@ -136,6 +138,7 @@ export default function Scenarios() {
         ← Chat
       </Link>
       <h1 className="text-3xl font-semibold">Compare loan scenarios</h1>
+      {inbox.filter(n => !n.read_at).map(n => <div className="rounded border p-3" key={n.id}>{n.message} <button onClick={() => void request("/v1/notices/" + n.id + "/read", post()).then(() => setInbox(old => old.filter(x => x.id !== n.id)))}>Dismiss</button></div>)}
       {!hasToken() ? (
         <Link to="/login">Sign in to compare your options</Link>
       ) : (
@@ -326,4 +329,3 @@ export default function Scenarios() {
     </main>
   );
 }
-

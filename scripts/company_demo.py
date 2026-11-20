@@ -61,7 +61,9 @@ def main() -> None:
         ).json()
         evidence = next(t for t in trace["turns"] if t["trace_id"] == body["trace_id"])
         if os.getenv("REQUIRE_LIVE_GEMINI") == "1":
-            assert evidence["router"] == "llm:gemini" and evidence["router_detail"]["model"], evidence["router"]
+            assert evidence["router"] == "llm:gemini" and evidence["router_detail"]["model"], (
+                evidence["router"]
+            )
         workers = evidence["workers"]
         assert set(workers) == set(body["agent_route"])
         assert max(w["started_at"] for w in workers.values()) < min(
@@ -83,7 +85,9 @@ def main() -> None:
         assert options[0]["total_interest_paise"] < options[1]["total_interest_paise"]
         quote = options[0]
         accept_url = "/v1/quotes/" + quote["quote_id"] + "/accept"
-        assert client.post(core + "/v1/quotes/" + quote["quote_id"] + "/accept",headers=reviewer).status_code in (401,403)
+        assert client.post(
+            core + "/v1/quotes/" + quote["quote_id"] + "/accept", headers=reviewer
+        ).status_code in (401, 403)
         applied = post(accept_url, customer)["application"]
         app_id = applied["application_id"]
         assert applied["status"] == "document_required"
@@ -109,6 +113,28 @@ def main() -> None:
         queue = client.get(core + "/v1/reviews", headers=reviewer)
         queue.raise_for_status()
         assert any(item["application_id"] == app_id for item in queue.json())
+        assert post(review_path + "/claim", reviewer)["owner"] == "staff-demo"
+        stats = client.get(core + "/v1/operations", headers=reviewer)
+        assert stats.status_code == 200 and stats.json()["pending_reviews"] >= 1
+        ticket = post(
+            "/v1/support/messages",
+            customer,
+            json={
+                "name": "Pilot Borrower",
+                "contact": "pilot@example.test",
+                "topic": "grievance",
+                "message": "Please review my application.",
+            },
+        )
+        queue = client.get(core + "/v1/operations/support", headers=reviewer)
+        assert any(item["reference"] == ticket["reference"] for item in queue.json())
+        post("/v1/operations/support/" + ticket["reference"], reviewer, json={"action": "claim"})
+        assert (
+            post(
+                "/v1/operations/support/" + ticket["reference"], reviewer, json={"action": "close"}
+            )["status"]
+            == "closed"
+        )
         assert (
             client.get(core + review_path + "/file", headers=reviewer).content
             == pdf_bytes.getvalue()
@@ -121,14 +147,22 @@ def main() -> None:
         final = post(review_path, reviewer, json=resolution)["application"]
         assert final["application_id"] == app_id and final["status"] == "approved", final
         assert client.post(core + review_path, headers=reviewer, json=resolution).status_code == 409
+        notices = client.get(core + "/v1/notices", headers=customer).json()
+        notice = next(item for item in notices if item["application_id"] == app_id)
+        assert "approved" in notice["message"]
+        post("/v1/notices/" + notice["id"] + "/read", customer)
         summary = client.get(core + f"/v1/applications/{app_id}/summary", headers=customer).json()
+        assert any(item["event"] == "Income reviewed" for item in summary["timeline"])
         assert summary["income_source"] == "underwriter_verified"
         assert summary["consent_version"] == "income-assessment-v1"
         assert summary["quote"]["quote_id"] == quote["quote_id"]
         assert final["decision"]["emi_paise"] == quote["emi_paise"]
         traces = [evidence.get("router_detail", {}), *workers.values()]
         calls, cost = model_cost(traces, json.loads(os.getenv("BENCH_USD_PER_MILLION", "{}")))
-        print("Completed application agent cost", json.dumps({"applications": 1, "model_calls": len(calls), "estimated_usd": cost}))
+        print(
+            "Completed application agent cost",
+            json.dumps({"applications": 1, "model_calls": len(calls), "estimated_usd": cost}),
+        )
         letter = post(f"/v1/applications/{app_id}/sanction", customer)
         signed = client.get(
             core + f"/v1/documents/{letter['document_id']}/signed-url", headers=customer

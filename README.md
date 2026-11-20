@@ -946,3 +946,5 @@ against the original review, including what is still open and why.
 
 MIT for the code in this repository. The demonstration is independent and is not a lending
 product; no warranty is given and no regulatory approval is implied.
+
+The review queue supports claiming work and flags cases older than `REVIEW_ESCALATION_SECONDS` (default 86400). Staff can view application and document counts and claim or close support requests at /operations. Customers see in-app notices on the loan scenarios page after an underwriter resolves evidence. Notices are retained until dismissed. An external email or SMS delivery service and an actual lender verification provider require separate configuration and integration.
