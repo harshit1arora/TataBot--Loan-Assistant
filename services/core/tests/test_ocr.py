@@ -136,3 +136,12 @@ def test_real_ocr_reads_a_rendered_payslip():
 
     assert result.income_paise == 8_500_000, f"OCR read: {result.fields} / {result.notes}"
     assert result.confidence > 0.3
+
+
+def test_gross_salary_and_conflicting_net_pay_require_review():
+    from core_service.extractors import _parse_fields
+
+    gross = _parse_fields("Gross Salary: 120000\nMonthly Income: 85000")
+    assert gross.income_paise is None and gross.requires_review
+    conflicting = _parse_fields("Net Pay: 85000\nNet Salary: 90000")
+    assert conflicting.income_paise is None and conflicting.requires_review

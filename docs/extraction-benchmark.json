@@ -1,0 +1,119 @@
+{
+  "seed": 731,
+  "cases": 240,
+  "ocr_provider": "rapidocr",
+  "results": {
+    "text_pdf": {
+      "n": 240,
+      "field_accuracy": {
+        "income_paise": 0.6666666666666666,
+        "name": 1.0,
+        "employer": 1.0
+      },
+      "confidence_calibration": {
+        "0.0": {
+          "n": 80,
+          "income_accuracy": 0.0
+        },
+        "0.9": {
+          "n": 160,
+          "income_accuracy": 1.0
+        }
+      },
+      "thresholds": [
+        {
+          "threshold": 0.5,
+          "review_share": 0.33333333333333337,
+          "accepted_income_accuracy": 1.0,
+          "review_error_precision": 1.0,
+          "error_review_recall": 1.0
+        },
+        {
+          "threshold": 0.7,
+          "review_share": 0.33333333333333337,
+          "accepted_income_accuracy": 1.0,
+          "review_error_precision": 1.0,
+          "error_review_recall": 1.0
+        },
+        {
+          "threshold": 0.75,
+          "review_share": 0.33333333333333337,
+          "accepted_income_accuracy": 1.0,
+          "review_error_precision": 1.0,
+          "error_review_recall": 1.0
+        },
+        {
+          "threshold": 0.85,
+          "review_share": 0.33333333333333337,
+          "accepted_income_accuracy": 1.0,
+          "review_error_precision": 1.0,
+          "error_review_recall": 1.0
+        },
+        {
+          "threshold": 0.9,
+          "review_share": 0.33333333333333337,
+          "accepted_income_accuracy": 1.0,
+          "review_error_precision": 1.0,
+          "error_review_recall": 1.0
+        }
+      ]
+    },
+    "ocr": {
+      "n": 240,
+      "field_accuracy": {
+        "income_paise": 0.6458333333333334,
+        "name": 0.9958333333333333,
+        "employer": 0.9708333333333333
+      },
+      "confidence_calibration": {
+        "0.0": {
+          "n": 85,
+          "income_accuracy": 0.0
+        },
+        "0.9": {
+          "n": 155,
+          "income_accuracy": 1.0
+        }
+      },
+      "thresholds": [
+        {
+          "threshold": 0.5,
+          "review_share": 0.35416666666666663,
+          "accepted_income_accuracy": 1.0,
+          "review_error_precision": 1.0,
+          "error_review_recall": 1.0
+        },
+        {
+          "threshold": 0.7,
+          "review_share": 0.35416666666666663,
+          "accepted_income_accuracy": 1.0,
+          "review_error_precision": 1.0,
+          "error_review_recall": 1.0
+        },
+        {
+          "threshold": 0.75,
+          "review_share": 0.35416666666666663,
+          "accepted_income_accuracy": 1.0,
+          "review_error_precision": 1.0,
+          "error_review_recall": 1.0
+        },
+        {
+          "threshold": 0.85,
+          "review_share": 0.35416666666666663,
+          "accepted_income_accuracy": 1.0,
+          "review_error_precision": 1.0,
+          "error_review_recall": 1.0
+        },
+        {
+          "threshold": 0.9,
+          "review_share": 0.35416666666666663,
+          "accepted_income_accuracy": 1.0,
+          "review_error_precision": 1.0,
+          "error_review_recall": 1.0
+        }
+      ]
+    }
+  },
+  "environment": "Windows, RapidOCR ONNX Runtime 1.4.4, synthetic fixtures generated with seed 731",
+  "limitations": "Synthetic test; exact match; missing values counted as incorrect; review is not a verified error in a real document. No real-world calibration claim."
+}

@@ -28,9 +28,7 @@ class ExtractionResult:
 
 
 SALARY_PATTERNS = [
-    (re.compile(r"net\s*pay[^0-9]{0,20}([0-9][0-9,]{3,})", re.I), 0.9),
-    (re.compile(r"gross\s*(?:salary|pay)[^0-9]{0,20}([0-9][0-9,]{3,})", re.I), 0.75),
-    (re.compile(r"(?:salary|income)[^0-9]{0,20}([0-9][0-9,]{3,})", re.I), 0.5),
+    (re.compile(r"\bnet\s*(?:pay|payable|salary)\b[^0-9\r\n]{0,20}([0-9][0-9,]{3,})", re.I), 0.9),
 ]
 NAME_PATTERN = re.compile(r"(?:employee\s*name|name)\s*[:\-]\s*([A-Za-z][A-Za-z .]{2,40})", re.I)
 EMPLOYER_PATTERN = re.compile(r"(?:employer|company)\s*[:\-]\s*([A-Za-z0-9&.,'\- ]{3,60})", re.I)
@@ -42,12 +40,11 @@ def _parse_fields(text: str) -> ExtractionResult:
     best_income: int | None = None
     best_confidence = 0.0
     for pattern, confidence in SALARY_PATTERNS:
-        match = pattern.search(text)
-        if not match:
-            continue
-        value = _to_paise(match.group(1))
-        if value and confidence > best_confidence:
-            best_income, best_confidence = value, confidence
+        values = {_to_paise(match.group(1)) for match in pattern.finditer(text)} - {None}
+        if len(values) > 1:
+            return ExtractionResult(notes=["conflicting net pay figures; manual review required"])
+        if values and confidence > best_confidence:
+            best_income, best_confidence = values.pop(), confidence
 
     if match := NAME_PATTERN.search(text):
         fields["name"] = match.group(1).strip()
@@ -95,32 +92,9 @@ class TextPdfExtractor:
                 notes=["no text layer found; manual review required"], requires_review=True
             )
 
-        fields: dict = {}
-        best_income: int | None = None
-        best_confidence = 0.0
-        for pattern, confidence in SALARY_PATTERNS:
-            match = pattern.search(text)
-            if not match:
-                continue
-            value = _to_paise(match.group(1))
-            if value and confidence > best_confidence:
-                best_income, best_confidence = value, confidence
-
-        if match := NAME_PATTERN.search(text):
-            fields["name"] = match.group(1).strip()
-        if match := EMPLOYER_PATTERN.search(text):
-            fields["employer"] = match.group(1).strip()
-        if best_income:
-            fields["monthly_income_paise"] = best_income
-
-        requires_review = best_confidence < min_confidence
-        return ExtractionResult(
-            fields=fields,
-            confidence=best_confidence,
-            income_paise=best_income,
-            requires_review=requires_review,
-            notes=[] if best_income else ["no salary figure found in the document text"],
-        )
+        result = _parse_fields(text)
+        result.requires_review = result.income_paise is None or result.confidence < min_confidence
+        return result
 
 
 class OcrExtractor:

@@ -502,7 +502,7 @@ and OCR runs once per document rather than per turn.
 
 ### What is *not* measured
 
-No production traffic, no labelled dataset, no load test, no error budget. There is no accuracy
+No production traffic, no labelled real-world dataset, no load test, no error budget. There is no production accuracy
 figure because nothing has been scored against ground truth, and no conversion or cost saving
 figure because no real customer has used it. Those are the numbers a pilot would produce, and they
 are deliberately absent here.
@@ -962,3 +962,18 @@ Set `CLOUD_SQL_MONITOR_TARGETS` on both core and its continuously running worker
 Every 300 seconds by default, the worker stores each instance's scheduled backup configuration, most recent scheduled run, most recent successful scheduled backup among the latest 100 runs, and PITR configuration. The operations page reports healthy, degraded or unknown. A disabled setting, failed or overdue latest scheduled run, missing recent success, or successful backup older than `BACKUP_MAX_AGE_HOURS` (default 36) is degraded. Authentication, permission and API failures are unknown. A missing or older-than-`BACKUP_MONITOR_STALE_SECONDS` result (default 900 seconds) is unknown. Configure `ESCALATION_EMAIL` and SMTP to queue an alert once per target, status and UTC day for degraded or unknown API results. Monitor the worker independently for outages, since a stopped worker cannot send alerts about itself.
 
 Use `BACKUP_MONITOR_INTERVAL_SECONDS` to change the polling interval. The age threshold must reflect the actual backup schedule. A healthy result confirms the reported settings and a recent successful backup. It does not execute a restore or verify the recovery window, application consistency, or document bucket contents. Continue periodic restore drills and monitor bucket versioning separately.
+
+### Synthetic payslip extraction benchmark
+
+`scripts/extraction_benchmark.py` generates a reproducible labelled set of 240 synthetic payslips with varied text-layer fonts and matching raster images with noise and blur. It reports exact-match field accuracy, observed income accuracy by confidence bucket, and review share, accepted-income accuracy, and error-review recall at multiple thresholds. The labels are generated independently of the extractor. These synthetic templates are limited and do not establish accuracy or confidence calibration on real documents.
+
+```sh
+python -m pip install -r services/core/requirements.txt pillow rapidocr-onnxruntime==1.4.4
+python scripts/extraction_benchmark.py --count 240 --seed 731 --ocr rapidocr --output extraction-results.json
+```
+
+Use `--ocr disabled` for a text-only run. Gross pay and an unlabeled income amount are routed to review, and conflicting net-pay figures are also routed to review. Historical documents extracted by older releases may have accepted gross pay. Reassess existing evidence before relying on those earlier verifications.
+
+A local run with seed 731 produced exact income-field accuracy of 160/240 for text PDFs and 155/240 for RapidOCR. At the 0.75 review threshold, 80/240 text cases and 85/240 OCR cases were routed to review. All automatically accepted amounts in this synthetic run matched the labels. The 0.9 confidence bucket had 100% accuracy in this small synthetic sample, so it should not be treated as a calibrated probability. See [the recorded metrics](docs/extraction-benchmark.json). The generator can also save the PDFs, PNGs and labels with `--dataset-dir`.
+
+The agent evaluation includes two prompt-injection cases that ask the system to print an unrelated marker. They were exercised in rules mode. A live-model red-team evaluation remains outstanding.
