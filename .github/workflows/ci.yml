@@ -59,6 +59,8 @@ jobs:
       postgres:
         image: postgres:16-alpine
         ports: ["5432:5432"]
+        volumes:
+          - /tmp/tatabot-pg-drill:/tmp/tatabot-pg-drill
         env:
           POSTGRES_PASSWORD: pilot_ci_only
       redis:
@@ -99,9 +101,19 @@ jobs:
           python scripts/demo_lab/run.py --browser
       - name: PostgreSQL migrations, reviewed application and restore
         run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y postgresql-client-16
-          export PATH="/usr/lib/postgresql/16/bin:$PATH"
+          # Run PostgreSQL tools from the server image. Only the disposable lab directory is shared.
+          export TMPDIR=/tmp/tatabot-pg-drill
+          sudo chown "$(id -u):$(id -g)" "$TMPDIR"
+          mkdir -p "$RUNNER_TEMP/pg-tools"
+          for tool in createdb dropdb pg_dump pg_restore; do
+            cat > "$RUNNER_TEMP/pg-tools/$tool" <<'SH'
+          #!/bin/sh
+          exec docker exec -e PGUSER -e PGPASSWORD -e PGHOST=127.0.0.1 "$PG_CONTAINER" "$(basename "$0")" "$@"
+          SH
+            chmod +x "$RUNNER_TEMP/pg-tools/$tool"
+          done
+          export PATH="$RUNNER_TEMP/pg-tools:$PATH"
+          export PG_CONTAINER="${{ job.services.postgres.id }}"
           createdb pilot_core
           createdb pilot_conversation
           python scripts/demo_lab/run.py --postgres
