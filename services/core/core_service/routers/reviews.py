@@ -60,7 +60,7 @@ def queue(_: str = Depends(reviewer), db: Session = Depends(get_db)) -> list[dic
             "confidence": doc.extraction_confidence,
             "fields": doc.extracted_fields,
             "owner": (
-                db.get(ReviewAssignment, doc.id).owner if db.get(ReviewAssignment, doc.id) else None
+                assignment.owner if (assignment := db.get(ReviewAssignment, doc.id)) else None
             ),
             "waiting_since": doc.created_at,
             "overdue": (datetime.now(UTC) - doc.created_at.replace(tzinfo=UTC)).total_seconds()
@@ -174,3 +174,5 @@ def resolve(
         metadata={"action": body.action, "application_id": application.id},
     )
     return {"application": _application_view(db, application), "action": body.action}
+
+
