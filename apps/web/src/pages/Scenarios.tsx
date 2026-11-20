@@ -17,6 +17,7 @@ type Quote = {
 };
 type Summary = {
   reasons: string[];
+  counterfactuals: {policy_version:string; annual_rate_percent:number; current_outcome:string; options: {type:string; amount_paise:number; tenure_months:number; income_paise?:number}[]} | null;
   bank_cross_check: { status: string; source: string; signals: string[]; independently_verified: boolean } | null;
   timeline: { at: string; event: string }[];
   verified_income_paise: number | null;
@@ -260,6 +261,19 @@ export default function Scenarios() {
                 Credit score · {summary.score_source.replace(/_/g, " ")}
               </p>
               <p>{summary.reasons.join(" ")}</p>
+              {summary.counterfactuals && <section className="rounded border p-3 space-y-2">
+                <h3 className="font-semibold">Possible alternatives under current policy</h3>
+                <p>Illustrative checks use current customer details and policy {summary.counterfactuals.policy_version} at {summary.counterfactuals.annual_rate_percent}% p.a. A new application requires a fresh assessment.</p>
+                {summary.counterfactuals.current_outcome !== "reject" && <p>The current assessment differs from this recorded decline. Compare a new scenario for current terms.</p>}
+                {summary.counterfactuals.current_outcome === "reject" && summary.counterfactuals.options.length === 0 && <p>No single amount, tenure or income change was found that meets current policy.</p>}
+                <ul className="list-disc pl-5">
+                  {summary.counterfactuals.options.map(option => <li key={option.type}>
+                    {option.type === "maximum_amount" && <>A maximum of {money(option.amount_paise)} over {option.tenure_months} months meets the current policy check.</>}
+                    {option.type === "minimum_tenure" && <>A tenure of {option.tenure_months} months for {money(option.amount_paise)} meets the current policy check.</>}
+                    {option.type === "minimum_verified_income" && <>Verified monthly income of at least {money(option.income_paise ?? 0)} would meet the affordability check for {money(option.amount_paise)} over {option.tenure_months} months. Income must be supported by evidence.</>}
+                  </li>)}
+                </ul>
+              </section>}
               {summary.verified_income_paise && (
                 <p>
                   Verified monthly income {money(summary.verified_income_paise)}

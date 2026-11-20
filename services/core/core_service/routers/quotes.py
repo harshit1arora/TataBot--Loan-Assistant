@@ -23,7 +23,7 @@ from ..models import (
 from ..money import compute_emi_paise
 from ..policy import Applicant, build_policy, decide
 from ..security import Principal, require_customer
-from ..services import documents, underwriting
+from ..services import counterfactuals, documents, underwriting
 from ..storage import build_store
 from .applications import _application_view
 
@@ -188,6 +188,7 @@ def summary(
     application_id: str,
     principal: Principal = Depends(require_customer),
     db: Session = Depends(get_db),
+    settings: Settings = Depends(get_settings),
 ) -> dict:
     from sqlalchemy import select
 
@@ -256,6 +257,7 @@ def summary(
     timeline.sort(key=lambda item: item["at"].isoformat())
     return {
         "timeline": timeline,
+        "counterfactuals": counterfactuals.alternatives(db, settings, application, decision),
         "reasons": [explanations.get(r, r.replace("_", " ")) for r in decision.reason_codes]
         if decision
         else [],

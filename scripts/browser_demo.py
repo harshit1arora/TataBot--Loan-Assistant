@@ -3,6 +3,7 @@
 import argparse
 import json
 import os
+import secrets
 from datetime import UTC, datetime
 from io import BytesIO
 from pathlib import Path
@@ -145,6 +146,85 @@ def run(url, local):
             page.get_by_role("button", name="Download sanction letter").click()
         assert Path(letter.value.path()).read_bytes().startswith(b"%PDF")
         print("Browser verified enrollment, review, approval and PDF for application", app_id)
+        if local:
+            phone = "9" + str(secrets.randbelow(10**9)).zfill(9)
+            register = page.request.post(
+                url + "/v1/customers",
+                data={
+                    "name": "Counterfactual Applicant",
+                    "phone": phone,
+                    "email": "scenario@example.test",
+                    "city": "Pune",
+                    "age": 34,
+                    "declared_monthly_income_rupees": 60000,
+                    "declared_credit_score": 745,
+                },
+            )
+            assert register.ok, register.text()
+            login = page.request.post(
+                url + "/auth/token",
+                data={"customer_id": register.json()["customer_id"], "phone": phone},
+            )
+            assert login.ok, login.text()
+            token = login.json()["access_token"]
+            headers = {"Authorization": "Bearer " + token}
+            created = page.request.post(
+                url + "/v1/applications",
+                headers=headers,
+                data={"requested_amount_rupees": 500000, "tenure_months": 36},
+            )
+            assert created.ok, created.text()
+            declined_id = created.json()["application_id"]
+            slip_data = BytesIO()
+            slip_pdf = canvas.Canvas(slip_data)
+            slip_pdf.drawString(40, 740, "Employee Name: Synthetic Applicant")
+            slip_pdf.drawString(40, 710, "Net Pay: 30000")
+            slip_pdf.save()
+            uploaded = page.request.post(
+                url + "/v1/documents",
+                headers=headers,
+                multipart={
+                    "application_id": declined_id,
+                    "doc_type": "salary_slip",
+                    "file": {
+                        "name": "salary.pdf",
+                        "mimeType": "application/pdf",
+                        "buffer": slip_data.getvalue(),
+                    },
+                },
+            )
+            assert uploaded.ok, uploaded.text()
+            assessed = page.request.post(
+                url
+                + "/v1/applications/"
+                + declined_id
+                + "/documents/"
+                + uploaded.json()["document_id"]
+                + "/assess",
+                headers=headers,
+            )
+            assert assessed.ok and assessed.json()["application"]["status"] == "rejected", (
+                assessed.text()
+            )
+            viewer = browser.new_context()
+            viewer.add_init_script(
+                "sessionStorage.setItem('tatabot.token', "
+                + json.dumps(token)
+                + "); sessionStorage.setItem('tatabot.expiresAt', String(Date.now()+3600000));"
+            )
+            decision_page = viewer.new_page()
+            decision_page.goto(url + "/scenarios?application=" + declined_id)
+            expect(
+                decision_page.get_by_role(
+                    "heading", name="Possible alternatives under current policy"
+                )
+            ).to_be_visible()
+            expect(
+                decision_page.get_by_text("Verified monthly income of at least", exact=False)
+            ).to_be_visible()
+            expect(decision_page.get_by_text("A maximum of", exact=False)).to_be_visible()
+            expect(decision_page.get_by_text("A tenure of", exact=False)).to_be_visible()
+            print("Browser verified declined application alternatives", declined_id)
         browser.close()
 
 

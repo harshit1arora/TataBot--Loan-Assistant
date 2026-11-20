@@ -1012,3 +1012,11 @@ python scripts/train_shadow.py path/to/default-of-credit-card-clients.zip
 ```
 
 The script uses a fixed seed, verifies TreeSHAP additivity, and writes the model and evaluation report. The UCI data remain subject to their license. Versioned database revision 7 adds the shadow records.
+
+### Declined-application alternatives
+
+A declined application's summary can show three illustrative alternatives, evaluated with the current deterministic policy and current core rate. It finds the highest whole-rupee loan amount below the original request, the shortest longer tenure, and the lowest additional verified monthly income that would pass the affordability rule. Every candidate is checked through `policy.decide` and the configured request limits. The income search uses the underwriter's supported upper limit of ₹1 crore per month.
+
+These checks use the customer's current age, credit score and pre-approved limit. They use income from the recorded evidence only while that document remains verified and unchanged. The original decline remains in the timeline. If current policy or facts produce a different outcome, the page reports that difference rather than presenting old terms as current. Age, credit-score and other policy failures are not bypassed. When a mock bank statement is attached, the higher-income suggestion is suppressed because a changed income would also require matching new bank evidence.
+
+The figures are comparisons, and a new application must be quoted and assessed again. A higher income must reflect actual, verifiable evidence. Historical applications without a linked valid income document are evaluated without verified income. The browser demo exercises both the underwriter approval journey and a separate affordability decline with all three alternatives.
