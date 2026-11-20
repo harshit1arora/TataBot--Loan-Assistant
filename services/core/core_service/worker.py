@@ -11,13 +11,14 @@ extractor interface stay the same.
 from __future__ import annotations
 
 import argparse
+import os
 import time
 
 from .config import get_settings
 from .db import create_all, session_scope
 from .logging_setup import configure_logging, get_logger
+from .services import backup_monitor, notifications
 from .services import documents as document_service
-from .services import notifications
 from .storage import build_store
 
 logger = get_logger("core.worker")
@@ -50,9 +51,16 @@ def main() -> None:
     configure_logging(settings.log_level, "core-worker")
     create_all()
     if args.once:
+        with session_scope() as db:
+            backup_monitor.poll(db)
         print(f"processed {run_once()} job(s)")
         return
+    last_monitor = 0.0
     while True:
+        if time.monotonic() - last_monitor >= float(os.getenv("BACKUP_MONITOR_INTERVAL_SECONDS", "300")):
+            with session_scope() as db:
+                backup_monitor.poll(db)
+            last_monitor = time.monotonic()
         run_once()
         time.sleep(args.interval)
 

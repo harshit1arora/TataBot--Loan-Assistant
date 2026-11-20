@@ -79,6 +79,8 @@ def manifest():
             STORAGE_BACKEND="local",
             AGENTS_BASE_URL="http://127.0.0.1:8004",
             CONVERSATION_BASE_URL="http://127.0.0.1:8001",
+            CLOUD_SQL_MONITOR_TARGETS=os.getenv("CLOUD_SQL_MONITOR_TARGETS", ""),
+            BACKUP_MONITOR_STALE_SECONDS=os.getenv("BACKUP_MONITOR_STALE_SECONDS", "900"),
         )
         + [
             jwt,
@@ -120,6 +122,9 @@ def manifest():
             SMTP_FROM=os.getenv("SMTP_FROM", ""),
             SMTP_USERNAME=os.getenv("SMTP_USERNAME", ""),
             ESCALATION_EMAIL=os.getenv("ESCALATION_EMAIL", ""),
+            CLOUD_SQL_MONITOR_TARGETS=os.getenv("CLOUD_SQL_MONITOR_TARGETS", ""),
+            BACKUP_MAX_AGE_HOURS=os.getenv("BACKUP_MAX_AGE_HOURS", "36"),
+            BACKUP_MONITOR_INTERVAL_SECONDS=os.getenv("BACKUP_MONITOR_INTERVAL_SECONDS", "300"),
         )
         + [
             jwt,

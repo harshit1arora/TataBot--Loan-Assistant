@@ -16,6 +16,7 @@ from ..config import get_settings
 from ..db import get_db
 from ..models import (
     Application,
+    BackupMonitor,
     CustomerNotice,
     Delivery,
     Document,
@@ -23,6 +24,7 @@ from ..models import (
     SupportMessage,
 )
 from ..security import Principal, require_customer
+from ..services import backup_monitor
 from .reviews import pending, reviewer
 
 router = APIRouter(prefix="/v1")
@@ -86,7 +88,20 @@ def operations(actor: str = Depends(reviewer), db: Session = Depends(get_db)):
                 activity = response.json()
         except httpx.HTTPError:
             pass
+    backups = []
+    for target in backup_monitor.targets():
+        record = db.get(BackupMonitor, target)
+        if not record:
+            backups.append({"target": target, "status": "unknown", "issues": ["no_monitor_result"]})
+        else:
+            age = (datetime.now(UTC) - record.checked_at.replace(tzinfo=UTC)).total_seconds()
+            result = {**record.result, "target": target, "age_seconds": max(0, int(age))}
+            if age > float(os.getenv("BACKUP_MONITOR_STALE_SECONDS", "900")):
+                result["status"] = "unknown"
+                result["issues"] = [*result.get("issues", []), "monitor_result_stale"]
+            backups.append(result)
     return {
+        "backup_monitor": backups,
         "agent_activity": activity,
         "services": checks,
         "delivery_counts": {  # noqa: C416

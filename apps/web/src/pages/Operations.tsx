@@ -22,6 +22,15 @@ export default function Operations() {
   return <main className="mx-auto max-w-4xl p-6 space-y-4">
     <h1 className="text-3xl font-semibold">Operations</h1><Link to="/identity#review">Sign in as staff</Link>
     <section className="rounded border p-4"><h2 className="font-semibold">Service overview</h2>
+      <h3 className="font-semibold">Cloud SQL backups and recovery</h3>
+      {Array.isArray(stats.backup_monitor) && stats.backup_monitor.length ? stats.backup_monitor.map((item: {target:string; status:string; issues:string[]; latest_successful_backup_at?:string; pitr_enabled?:boolean}) => (
+        <div key={item.target} className="border rounded p-2">
+          <p>{item.target} · {item.status}</p>
+          <p>Last successful scheduled backup: {item.latest_successful_backup_at ? new Date(item.latest_successful_backup_at).toLocaleString() : "Unavailable"}</p>
+          <p>Point-in-time recovery: {item.pitr_enabled === true ? "Enabled" : item.pitr_enabled === false ? "Disabled" : "Unknown"}</p>
+          {item.issues.length > 0 && <p>Issues: {item.issues.join(", ").replace(/_/g, " ")}</p>}
+        </div>
+      )) : <p>Monitoring is not configured.</p>}
       <p>Agent activity (24 hours): {JSON.stringify(stats.agent_activity ?? {})}</p>
       <p>Service health: {JSON.stringify(stats.services ?? {})}</p>
       <p>Overdue reviews: {String(stats.overdue_reviews ?? "—")}</p>
